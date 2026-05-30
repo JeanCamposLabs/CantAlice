@@ -11,7 +11,7 @@
  */
 export const SPOTIFY_CLIENT_ID: string =
   (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined)?.trim() ||
-  'PASTE_YOUR_SPOTIFY_CLIENT_ID_HERE'
+  'd5d938d0fe3e4f38aa84eb3a65554ea7'
 
 /**
  * The OAuth redirect URI must EXACTLY match one registered in your Spotify app

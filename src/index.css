@@ -1,0 +1,220 @@
+@import 'tailwindcss';
+
+/*
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  Canta, Alice — Design System                                  ║
+  ║  A twilight-over-music palette: deep indigo nights warmed by    ║
+  ║  rose, peach and gold. Elegant, feminine, never childish.       ║
+  ╚══════════════════════════════════════════════════════════════╝
+*/
+
+@theme {
+  /* — Core surfaces — */
+  --color-night-900: #120726;
+  --color-night-800: #1a0b2e;
+  --color-night-700: #241141;
+  --color-night-600: #321a57;
+  --color-night-500: #43246f;
+
+  /* — Warm accents (sunset / stage lights) — */
+  --color-rose-300: #ffb3c9;
+  --color-rose-400: #ff8fb1;
+  --color-rose-500: #f25c8a;
+  --color-blush: #ffd9e3;
+  --color-peach: #ffc4a3;
+  --color-gold: #ffd56b;
+
+  /* — Cool accents (aurora) — */
+  --color-aurora-1: #b478ff;
+  --color-aurora-2: #7c5cff;
+  --color-aurora-3: #5ad1ff;
+
+  /* — Text — */
+  --color-cream: #fdf2f8;
+  --color-mist: #d8c9ec;
+
+  /* — Typography — */
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  /* — Motion — */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* — Radii — */
+  --radius-card: 1.5rem;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    color: var(--color-cream);
+    background: var(--color-night-900);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  ::selection {
+    background: var(--color-rose-400);
+    color: var(--color-night-900);
+  }
+
+  /* Custom scrollbar — subtle, on-brand */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--color-aurora-2) 45%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--color-aurora-2) 70%, transparent);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  /* Frosted-glass card — the workhorse surface */
+  .glass {
+    background: color-mix(in oklab, var(--color-night-700) 55%, transparent);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid color-mix(in oklab, white 10%, transparent);
+    box-shadow:
+      0 20px 60px -20px rgba(10, 2, 30, 0.7),
+      inset 0 1px 0 0 color-mix(in oklab, white 14%, transparent);
+  }
+
+  .glass-strong {
+    background: color-mix(in oklab, var(--color-night-700) 78%, transparent);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid color-mix(in oklab, white 12%, transparent);
+  }
+
+  /* Warm gradient text for headings / brand */
+  .text-glow {
+    background: linear-gradient(105deg, var(--color-blush) 0%, var(--color-peach) 38%, var(--color-gold) 72%, var(--color-rose-300) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-aurora {
+    background: linear-gradient(105deg, var(--color-aurora-3) 0%, var(--color-aurora-1) 55%, var(--color-rose-400) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Primary call-to-action */
+  .btn-primary {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+    color: var(--color-night-900);
+    background: linear-gradient(105deg, var(--color-peach), var(--color-rose-400) 60%, var(--color-aurora-1));
+    box-shadow: 0 10px 30px -8px color-mix(in oklab, var(--color-rose-400) 70%, transparent);
+    transition: transform 0.25s var(--ease-soft), box-shadow 0.25s var(--ease-soft), filter 0.25s var(--ease-soft);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.06);
+    box-shadow: 0 16px 40px -10px color-mix(in oklab, var(--color-rose-400) 80%, transparent);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 500;
+    color: var(--color-cream);
+    background: color-mix(in oklab, white 6%, transparent);
+    border: 1px solid color-mix(in oklab, white 12%, transparent);
+    transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft), transform 0.2s var(--ease-soft);
+  }
+  .btn-ghost:hover {
+    background: color-mix(in oklab, white 12%, transparent);
+    border-color: color-mix(in oklab, white 22%, transparent);
+  }
+}
+
+/* — Animated aurora background — */
+@keyframes drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  33%  { transform: translate3d(4%, -3%, 0) scale(1.08); }
+  66%  { transform: translate3d(-3%, 4%, 0) scale(0.96); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes float-note {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.5; }
+  90%  { opacity: 0.5; }
+  100% { transform: translateY(-120vh) rotate(28deg); opacity: 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, white 4%, transparent) 25%,
+    color-mix(in oklab, white 10%, transparent) 50%,
+    color-mix(in oklab, white 4%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

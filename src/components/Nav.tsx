@@ -1,7 +1,8 @@
-import { Home, Search, Library, BookHeart, LogOut, LogIn } from 'lucide-react'
+import { Home, Search, Library, BookHeart, LogOut, LogIn, HelpCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNav, type View } from '../store/useNav'
 import { useSession } from '../store/useSession'
+import { useUI } from '../store/useUI'
 import { Brand } from './Brand'
 import { beginLogin, logout } from '../spotify/auth'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
@@ -144,6 +145,13 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="mt-auto">
+        <button
+          onClick={useUI.getState().openHelp}
+          className="mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-medium text-mist/70 transition-colors hover:bg-white/5 hover:text-cream"
+        >
+          <HelpCircle size={20} />
+          <span className="text-[0.95rem]">Ajuda &amp; dicas</span>
+        </button>
         <AccountControl vertical />
         <p className="mt-4 px-3 text-[0.68rem] leading-relaxed text-mist/40">
           Feito com carinho para a Alice aprender inglês cantando. 🎶
@@ -156,7 +164,7 @@ export function Sidebar() {
 export function MobileBar() {
   const { view, go } = useNav()
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <div className="glass-strong mx-3 mb-3 flex items-center justify-around rounded-3xl px-2 py-1.5">
         {ITEMS.map((item) => (
           <NavButton
@@ -173,9 +181,18 @@ export function MobileBar() {
 
 export function MobileTopBar() {
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-night-900/60 px-5 py-4 backdrop-blur-xl lg:hidden">
+    <header className="pt-safe sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-night-900/60 px-5 py-4 backdrop-blur-xl lg:hidden">
       <Brand compact />
-      <AccountControl compact />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={useUI.getState().openHelp}
+          aria-label="Ajuda e dicas"
+          className="rounded-full p-2 text-mist/60 transition-colors hover:bg-white/10 hover:text-cream"
+        >
+          <HelpCircle size={20} />
+        </button>
+        <AccountControl compact />
+      </div>
     </header>
   )
 }

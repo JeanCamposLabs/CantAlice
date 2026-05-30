@@ -8,6 +8,7 @@ import {
   MicVocal,
   Crown,
   Disc3,
+  Hand,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNav } from '../store/useNav'
@@ -91,6 +92,8 @@ function KaraokeStage({
   const markPracticed = useLibrary((s) => s.markPracticed)
   const showTranslations = useLibrary((s) => s.showTranslations)
   const toggleTranslations = useLibrary((s) => s.toggleTranslations)
+  const wordHintSeen = useLibrary((s) => s.wordHintSeen)
+  const markWordHintSeen = useLibrary((s) => s.markWordHintSeen)
 
   const practicedFor = useRef<string | null>(null)
 
@@ -225,6 +228,8 @@ function KaraokeStage({
             </div>
           )}
 
+          {status === 'done' && !wordHintSeen && <WordHint onClose={markWordHintSeen} />}
+
           {status === 'done' && lyrics && (
             <LyricsView
               lyrics={lyrics}
@@ -237,6 +242,29 @@ function KaraokeStage({
         </div>
       </div>
     </div>
+  )
+}
+
+/** One-time, auto-dismissing nudge teaching the tap-a-word interaction. */
+function WordHint({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 9000)
+    return () => clearTimeout(t)
+  }, [onClose])
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="glass-strong absolute inset-x-0 top-3 z-20 mx-auto flex w-fit max-w-[90%] items-center gap-2 rounded-full px-4 py-2 text-sm shadow-xl"
+    >
+      <Hand size={16} className="text-rose-300" />
+      <span>
+        Dica: toque em qualquer <strong>palavra</strong> para ver a tradução e guardá-la.
+      </span>
+    </motion.button>
   )
 }
 

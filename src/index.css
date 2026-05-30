@@ -97,6 +97,14 @@
 }
 
 @layer components {
+  /* Respect iOS safe areas when installed as a standalone app. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
   /* Frosted-glass card — the workhorse surface */
   .glass {
     background: color-mix(in oklab, var(--color-night-700) 55%, transparent);

@@ -40,6 +40,8 @@ interface LibraryState {
   hasOnboarded: boolean
   /** Preference: show Portuguese translation under each lyric line by default. */
   showTranslations: boolean
+  /** Whether the "tap any word" hint has been shown in the karaoke view. */
+  wordHintSeen: boolean
 
   // — song actions —
   addSong: (track: SpotifyTrack, status: SongStatus) => void
@@ -56,6 +58,7 @@ interface LibraryState {
   // — preferences —
   setOnboarded: (v: boolean) => void
   toggleTranslations: () => void
+  markWordHintSeen: () => void
 }
 
 function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
@@ -83,6 +86,7 @@ export const useLibrary = create<LibraryState>()(
       vocab: {},
       hasOnboarded: false,
       showTranslations: true,
+      wordHintSeen: false,
 
       addSong: (track, status) =>
         set((s) => ({
@@ -153,6 +157,7 @@ export const useLibrary = create<LibraryState>()(
 
       setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),
+      markWordHintSeen: () => set({ wordHintSeen: true }),
     }),
     { name: STORAGE_KEY },
   ),

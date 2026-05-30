@@ -22,8 +22,15 @@ no caderninho de vocabulário.
 - **Acompanhe o progresso** — quantas músicas, quantas palavras, e continue de onde parou.
 - **Lindo de viver nele** — fundo aurora animado, vidro fosco, tipografia elegante e tudo em português.
 
+- **Instale como app** — no iPhone/iPad/Android dá pra adicionar à tela de início e abrir em tela cheia, com ícone próprio (PWA).
+- **Atualiza sozinho** — quando você publica uma mudança, a página aberta da Alice detecta e se atualiza (sem precisar limpar cache).
+- **Ajuda &amp; dicas** — um guia rápido dentro do app (botão de ajuda), com reconectar Spotify e "Atualizar agora".
+
 A biblioteca da Alice fica salva **no próprio navegador** dela (localStorage) — sem
 contas, sem servidor, privado.
+
+> 📱 **Instalar na tela de início (iPhone/iPad):** abra o site no Safari → botão de
+> compartilhar → *Adicionar à Tela de Início*. Vira um app de verdade, em tela cheia.
 
 ## 🧰 Tecnologia
 

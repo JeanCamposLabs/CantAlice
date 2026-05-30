@@ -16,6 +16,7 @@ import {
   handleRedirectCallback,
   isLoggedIn,
   getValidAccessToken,
+  logout,
 } from './spotify/auth'
 import { getCurrentUser } from './spotify/api'
 import { playerController } from './spotify/player'
@@ -55,8 +56,24 @@ export function App() {
         setAuth('loggedin')
         // Premium accounts get the full Web Playback SDK device.
         if (user.product === 'premium') playerController.init()
-      } catch {
-        if (!cancelled) setAuth('loggedout')
+      } catch (e) {
+        if (cancelled) return
+        // We have a token but the profile call failed. The most common cause
+        // is the Spotify app being in "Development Mode": only accounts added
+        // to the app's allow-list can use it. Surface that clearly instead of
+        // silently bouncing back to the connect screen.
+        setAuth('loggedout')
+        logout()
+        const msg = (e as Error).message
+        if (/\b403\b/.test(msg)) {
+          setAuthError(
+            'Esta conta do Spotify ainda não tem acesso ao app. ' +
+              'Peça para adicionar o seu e-mail do Spotify na lista de usuários ' +
+              '(Spotify Developer Dashboard → o app → Settings → User Management).',
+          )
+        } else {
+          setAuthError('Não consegui carregar seu perfil do Spotify. Tente conectar novamente.')
+        }
       }
     })()
     return () => {
@@ -123,11 +140,18 @@ function ErrorBanner({ message, onClose }: { message: string; onClose: () => voi
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed inset-x-0 top-4 z-[60] mx-auto w-fit max-w-[92vw]"
+      className="pt-safe fixed inset-x-0 top-3 z-[90] mx-auto w-[92vw] max-w-md px-1"
     >
-      <div className="glass-strong flex items-center gap-3 rounded-full px-5 py-3 text-sm">
-        <span>{message}</span>
-        <button onClick={onClose} className="text-mist/60 hover:text-cream">
+      <div className="glass-strong flex items-start gap-3 rounded-2xl px-5 py-4 text-sm shadow-2xl">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/20 text-rose-300">
+          !
+        </span>
+        <span className="flex-1 leading-relaxed">{message}</span>
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 text-mist/60 hover:text-cream"
+        >
           ✕
         </button>
       </div>

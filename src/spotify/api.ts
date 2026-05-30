@@ -82,11 +82,37 @@ function mapTrack(t: RawTrack): SpotifyTrack {
   }
 }
 
+// Some Spotify accounts/tokens reject the `limit` query param on /search with
+// "Invalid limit" (HTTP 400), even for in-range values. Once we see that, we
+// stop sending `limit` for the rest of the session (Spotify defaults to 20).
+let searchLimitRejected = false
+
 export async function searchTracks(query: string, limit = 24): Promise<SpotifyTrack[]> {
   if (!query.trim()) return []
-  const params = new URLSearchParams({ q: query, type: 'track', limit: String(limit) })
-  const data = await spotifyFetch<{ tracks: { items: RawTrack[] } }>(`/search?${params}`)
-  return data.tracks.items.map(mapTrack)
+  const safeLimit = Math.min(50, Math.max(1, Math.trunc(limit)))
+
+  const buildParams = (withLimit: boolean) => {
+    const qs = new URLSearchParams({ q: query.trim(), type: 'track' })
+    if (withLimit) qs.set('limit', String(safeLimit))
+    return qs
+  }
+
+  const run = async (withLimit: boolean) => {
+    const data = await spotifyFetch<{ tracks: { items: RawTrack[] } }>(
+      `/search?${buildParams(withLimit)}`,
+    )
+    return data.tracks.items.map(mapTrack)
+  }
+
+  try {
+    return await run(!searchLimitRejected)
+  } catch (e) {
+    if (!searchLimitRejected && /invalid limit/i.test((e as Error).message)) {
+      searchLimitRejected = true
+      return run(false)
+    }
+    throw e
+  }
 }
 
 export async function getTrack(id: string): Promise<SpotifyTrack> {

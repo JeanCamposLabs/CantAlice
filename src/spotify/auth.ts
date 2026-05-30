@@ -63,16 +63,28 @@ export async function handleRedirectCallback(): Promise<boolean> {
   const error = url.searchParams.get('error')
 
   if (error) {
-    // User denied, or misconfiguration. Clean the URL so we don't loop.
     cleanUrl()
-    throw new Error(`Spotify recusou a conexão: ${error}`)
+    // In Development Mode, a non-allow-listed account is rejected here.
+    if (error === 'access_denied') {
+      throw new Error(
+        'O Spotify não liberou o acesso. Se esta não for a conta dona do app, ' +
+          'peça para adicionar o seu e-mail do Spotify em User Management, no painel do app.',
+      )
+    }
+    throw new Error(`O Spotify recusou a conexão: ${error}`)
   }
   if (!code) return false
 
   const verifier = localStorage.getItem(LS.verifier)
   if (!verifier) {
+    // The PKCE verifier we saved before redirecting is gone — usually because
+    // the flow returned in a different browser/context (e.g. opened in another
+    // app, or private browsing cleared storage).
     cleanUrl()
-    return false
+    throw new Error(
+      'A sessão de login se perdeu. Tente conectar de novo no mesmo navegador ' +
+        '(sem aba anônima/privada).',
+    )
   }
 
   const body = new URLSearchParams({

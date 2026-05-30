@@ -43,6 +43,9 @@ jobs:
           # repository *variable* named SPOTIFY_CLIENT_ID is the cleanest place
           # for it. If unset, the value baked into src/config.ts is used.
           VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
+          # Unique per commit — lets the running app detect new deploys and
+          # prompt/refresh automatically (see src/hooks/useAppUpdate.ts).
+          VITE_APP_VERSION: ${{ github.sha }}
         run: npm run build
 
       - name: Upload Pages artifact

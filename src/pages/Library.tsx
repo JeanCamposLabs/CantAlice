@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Play, Trash2, GraduationCap, Sparkles, Music2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
+import { AlbumArt } from '../components/AlbumArt'
 import {
   useLibrary,
   selectSongs,
@@ -117,14 +118,8 @@ function SongRow({ song }: { song: SavedSong }) {
       exit={{ opacity: 0, x: -20 }}
       className="glass group flex items-center gap-4 rounded-2xl p-3"
     >
-      <button onClick={open} className="relative shrink-0 overflow-hidden rounded-xl">
-        {song.image ? (
-          <img src={song.image} alt="" className="h-16 w-16 object-cover" />
-        ) : (
-          <div className="grid h-16 w-16 place-items-center bg-night-600 text-mist/40">
-            <Music2 />
-          </div>
-        )}
+      <button onClick={open} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
+        <AlbumArt src={song.image} alt={`Capa de ${song.name}`} fallbackIcon={<Music2 />} />
         <span className="absolute inset-0 grid place-items-center bg-night-900/55 opacity-0 transition-opacity group-hover:opacity-100">
           <Play size={22} className="ml-0.5 text-cream" fill="currentColor" />
         </span>

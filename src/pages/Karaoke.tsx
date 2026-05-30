@@ -18,6 +18,7 @@ import { fetchLyrics, type LyricsResult } from '../lyrics/lrclib'
 import { useKaraokePlayback } from '../hooks/useKaraokePlayback'
 import { LyricsView } from '../components/LyricsView'
 import { PlayerControls } from '../components/PlayerControls'
+import { AlbumArt } from '../components/AlbumArt'
 import { ConnectGate, EmptyState } from '../components/States'
 
 type LyricsStatus = 'idle' | 'loading' | 'done' | 'notfound'
@@ -147,13 +148,7 @@ function KaraokeStage({
             animate={{ opacity: 1, scale: 1 }}
             className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-3xl shadow-2xl sm:w-36 lg:w-full"
           >
-            {image ? (
-              <img src={image} alt={`Capa de ${track.name}`} className="h-full w-full object-cover" />
-            ) : (
-              <div className="grid h-full w-full place-items-center bg-night-600 text-mist/40">
-                <Disc3 size={48} />
-              </div>
-            )}
+            <AlbumArt src={image} alt={`Capa de ${track.name}`} fallbackIcon={<Disc3 size={48} />} />
             {playback.isPlaying && (
               <motion.div
                 className="absolute inset-0 rounded-3xl ring-2 ring-rose-400/60"

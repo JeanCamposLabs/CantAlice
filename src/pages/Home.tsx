@@ -6,6 +6,7 @@ import { useLibrary, selectSongs, selectVocab, type SavedSong } from '../store/u
 import { useNav } from '../store/useNav'
 import { beginLogin } from '../spotify/auth'
 import { getTrack } from '../spotify/api'
+import { AlbumArt } from '../components/AlbumArt'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { greeting } from '../lib/format'
 import { SetupNotice } from '../components/States'
@@ -261,13 +262,9 @@ function ContinueCard({ song }: { song: SavedSong }) {
       onClick={open}
       className="glass group flex items-center gap-4 rounded-2xl p-3 text-left"
     >
-      {song.image ? (
-        <img src={song.image} alt="" className="h-14 w-14 rounded-xl object-cover" />
-      ) : (
-        <div className="grid h-14 w-14 place-items-center rounded-xl bg-night-600">
-          <Music2 className="text-mist/40" />
-        </div>
-      )}
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+        <AlbumArt src={song.image} alt={`Capa de ${song.name}`} fallbackIcon={<Music2 />} />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{song.name}</div>
         <div className="truncate text-sm text-mist/60">{song.artist}</div>

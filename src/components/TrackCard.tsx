@@ -4,6 +4,7 @@ import type { SpotifyTrack } from '../spotify/api'
 import { useLibrary } from '../store/useLibrary'
 import { useNav } from '../store/useNav'
 import { useSession } from '../store/useSession'
+import { AlbumArt } from './AlbumArt'
 
 /**
  * A song result card. Shows album art, lets Alice open the karaoke view, and
@@ -36,18 +37,12 @@ export function TrackCard({ track }: { track: SpotifyTrack }) {
         onClick={open}
         className="relative aspect-square w-full overflow-hidden rounded-2xl"
       >
-        {image ? (
-          <img
-            src={image}
-            alt={`Capa de ${track.name}`}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center bg-night-600 text-mist/40">
-            <Sparkles />
-          </div>
-        )}
+        <AlbumArt
+          src={image}
+          alt={`Capa de ${track.name}`}
+          imgClassName="transition-transform duration-500 group-hover:scale-105"
+          fallbackIcon={<Sparkles size={28} />}
+        />
         <span className="absolute inset-0 bg-gradient-to-t from-night-900/70 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         <span className="absolute bottom-3 right-3 grid h-12 w-12 translate-y-2 place-items-center rounded-full bg-cream text-night-900 opacity-0 shadow-xl transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
           <Play size={22} className="ml-0.5" fill="currentColor" />

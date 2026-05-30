@@ -4,6 +4,7 @@ import { AuroraBackground } from './components/AuroraBackground'
 import { FloatingNotes } from './components/FloatingNotes'
 import { Sidebar, MobileBar, MobileTopBar } from './components/Nav'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { Help } from './components/Help'
 import { HomePage } from './pages/Home'
 import { SearchPage } from './pages/Search'
 import { LibraryPage } from './pages/Library'
@@ -93,6 +94,7 @@ export function App() {
       <MobileBar />
 
       <UpdatePrompt />
+      <Help />
 
       {!IS_SPOTIFY_CONFIGURED && <ConfigBadge />}
     </>

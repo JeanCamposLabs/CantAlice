@@ -4,6 +4,7 @@ import type { SpotifyTrack } from '../spotify/api'
 import { useLibrary } from '../store/useLibrary'
 import { useNav } from '../store/useNav'
 import { useSession } from '../store/useSession'
+import { useUI } from '../store/useUI'
 import { AlbumArt } from './AlbumArt'
 
 /**
@@ -15,6 +16,7 @@ export function TrackCard({ track }: { track: SpotifyTrack }) {
   const addSong = useLibrary((s) => s.addSong)
   const go = useNav((s) => s.go)
   const setActiveTrack = useSession((s) => s.setActiveTrack)
+  const celebrate = useUI((s) => s.celebrate)
 
   const image = track.album.images?.[0]?.url ?? null
   const artists = track.artists.map((a) => a.name).join(', ')
@@ -63,7 +65,10 @@ export function TrackCard({ track }: { track: SpotifyTrack }) {
         />
         <SaveButton
           active={status === 'known'}
-          onClick={() => addSong(track, 'known')}
+          onClick={() => {
+            if (status !== 'known') celebrate('Mais uma que você já sabe cantar!')
+            addSong(track, 'known')
+          }}
           icon={status === 'known' ? Check : GraduationCap}
           label="Já sei"
           tone="known"

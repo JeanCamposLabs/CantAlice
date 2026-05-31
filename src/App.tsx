@@ -5,6 +5,8 @@ import { FloatingNotes } from './components/FloatingNotes'
 import { Sidebar, MobileBar, MobileTopBar } from './components/Nav'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { Help } from './components/Help'
+import { Celebration } from './components/Celebration'
+import { InstallPrompt } from './components/InstallPrompt'
 import { HomePage } from './pages/Home'
 import { SearchPage } from './pages/Search'
 import { LibraryPage } from './pages/Library'
@@ -111,7 +113,9 @@ export function App() {
       <MobileBar />
 
       <UpdatePrompt />
+      <InstallPrompt />
       <Help />
+      <Celebration />
 
       {!IS_SPOTIFY_CONFIGURED && <ConfigBadge />}
     </>

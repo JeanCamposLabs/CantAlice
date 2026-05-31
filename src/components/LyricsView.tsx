@@ -20,6 +20,7 @@ const LEAD_MS = 350
 
 export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLine }: Props) {
   const showTranslations = useLibrary((s) => s.showTranslations)
+  const largeLyrics = useLibrary((s) => s.largeLyrics)
 
   const lines: LyricLine[] = useMemo(() => {
     if (lyrics.synced) return lyrics.synced
@@ -119,6 +120,7 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
             line={line}
             index={i}
             isSynced={isSynced}
+            large={largeLyrics}
             state={i === activeIdx ? 'active' : i < activeIdx ? 'past' : 'future'}
             translation={showTranslations ? translations[i] : undefined}
             onWordClick={onWordClick}
@@ -141,6 +143,7 @@ const LyricLineRow = ({
   ref,
   line,
   isSynced,
+  large,
   state,
   translation,
   onWordClick,
@@ -150,6 +153,7 @@ const LyricLineRow = ({
   line: LyricLine
   index: number
   isSynced: boolean
+  large: boolean
   state: LineState
   translation?: string
   onWordClick: (word: string, e: React.MouseEvent<HTMLButtonElement>) => void
@@ -160,14 +164,19 @@ const LyricLineRow = ({
 
   const isBlank = line.text.trim() === ''
 
-  // Visual emphasis by karaoke state (only meaningful when synced).
+  // Visual emphasis by karaoke state. In "large" mode we lift the contrast of
+  // the non-active lines so everything stays easy to read at a distance.
   const stateClass = !isSynced
     ? 'text-cream/90'
     : state === 'active'
       ? 'text-cream'
       : state === 'past'
-        ? 'text-mist/35'
-        : 'text-mist/55'
+        ? large
+          ? 'text-mist/55'
+          : 'text-mist/35'
+        : large
+          ? 'text-mist/75'
+          : 'text-mist/55'
 
   if (isBlank) return <div ref={ref} className="h-5" aria-hidden />
 
@@ -194,7 +203,9 @@ const LyricLineRow = ({
       )}
 
       <p
-        className={`font-display text-2xl leading-relaxed transition-all duration-300 sm:text-[1.7rem] ${stateClass} ${
+        className={`font-display leading-relaxed transition-all duration-300 ${
+          large ? 'text-3xl sm:text-[2.5rem]' : 'text-2xl sm:text-[1.7rem]'
+        } ${stateClass} ${
           isSynced && state === 'active' ? 'drop-shadow-[0_2px_20px_rgba(255,143,177,0.35)]' : ''
         }`}
       >
@@ -217,7 +228,11 @@ const LyricLineRow = ({
       </p>
 
       {translation && (
-        <p className="mt-0.5 px-0.5 text-base italic text-rose-300/80 sm:text-lg">
+        <p
+          className={`mt-0.5 px-0.5 italic ${
+            large ? 'text-lg text-rose-300/90 sm:text-2xl' : 'text-base text-rose-300/80 sm:text-lg'
+          }`}
+        >
           {translation}
         </p>
       )}

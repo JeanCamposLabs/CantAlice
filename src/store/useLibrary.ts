@@ -42,6 +42,10 @@ interface LibraryState {
   showTranslations: boolean
   /** Whether the "tap any word" hint has been shown in the karaoke view. */
   wordHintSeen: boolean
+  /** Preference: larger, higher-contrast karaoke lyrics. */
+  largeLyrics: boolean
+  /** Daily practice streak. */
+  streak: { count: number; lastDate: string | null }
 
   // — song actions —
   addSong: (track: SpotifyTrack, status: SongStatus) => void
@@ -58,7 +62,20 @@ interface LibraryState {
   // — preferences —
   setOnboarded: (v: boolean) => void
   toggleTranslations: () => void
+  toggleLargeLyrics: () => void
   markWordHintSeen: () => void
+}
+
+/** Local date as YYYY-MM-DD (so streaks follow the user's calendar day). */
+function todayKey(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+}
+function yesterdayKey(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return todayKey(d)
 }
 
 function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
@@ -87,6 +104,8 @@ export const useLibrary = create<LibraryState>()(
       hasOnboarded: false,
       showTranslations: true,
       wordHintSeen: false,
+      largeLyrics: false,
+      streak: { count: 0, lastDate: null },
 
       addSong: (track, status) =>
         set((s) => ({
@@ -113,20 +132,32 @@ export const useLibrary = create<LibraryState>()(
         ),
 
       markPracticed: (id) =>
-        set((s) =>
-          s.songs[id]
-            ? {
-                songs: {
+        set((s) => {
+          // Advance the daily streak (idempotent within the same day).
+          const today = todayKey()
+          let streak = s.streak
+          if (s.streak.lastDate !== today) {
+            const continuing = s.streak.lastDate === yesterdayKey()
+            streak = {
+              count: continuing ? s.streak.count + 1 : 1,
+              lastDate: today,
+            }
+          }
+          const song = s.songs[id]
+          return {
+            streak,
+            songs: song
+              ? {
                   ...s.songs,
                   [id]: {
-                    ...s.songs[id],
-                    practiceCount: s.songs[id].practiceCount + 1,
+                    ...song,
+                    practiceCount: song.practiceCount + 1,
                     lastPracticedAt: Date.now(),
                   },
-                },
-              }
-            : s,
-        ),
+                }
+              : s.songs,
+          }
+        }),
 
       songStatus: (id) => get().songs[id]?.status ?? null,
 
@@ -157,6 +188,7 @@ export const useLibrary = create<LibraryState>()(
 
       setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),
+      toggleLargeLyrics: () => set((s) => ({ largeLyrics: !s.largeLyrics })),
       markWordHintSeen: () => set({ wordHintSeen: true }),
     }),
     { name: STORAGE_KEY },
@@ -172,4 +204,11 @@ export function selectSongs(state: LibraryState, status: SongStatus): SavedSong[
 
 export function selectVocab(state: LibraryState): VocabWord[] {
   return Object.values(state.vocab).sort((a, b) => b.addedAt - a.addedAt)
+}
+
+/** The streak count, but only if it's still "alive" (practised today/yesterday). */
+export function currentStreak(state: LibraryState): number {
+  const { count, lastDate } = state.streak
+  if (!lastDate) return 0
+  return lastDate === todayKey() || lastDate === yesterdayKey() ? count : 0
 }

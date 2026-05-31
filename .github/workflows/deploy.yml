@@ -47,6 +47,11 @@ jobs:
           # (recommended) OR Secrets — either works thanks to the fallback.
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+          # Owner contact for the in-app "Pedir acesso" flow. Set a repository
+          # Variable named OWNER_EMAIL (and optionally OWNER_WHATSAPP, digits
+          # only with country code). The VITE_-prefixed names are accepted too.
+          VITE_OWNER_EMAIL: ${{ vars.OWNER_EMAIL || vars.VITE_OWNER_EMAIL || secrets.OWNER_EMAIL }}
+          VITE_OWNER_WHATSAPP: ${{ vars.OWNER_WHATSAPP || vars.VITE_OWNER_WHATSAPP }}
           # Unique per commit — lets the running app detect new deploys and
           # prompt/refresh automatically (see src/hooks/useAppUpdate.ts).
           VITE_APP_VERSION: ${{ github.sha }}

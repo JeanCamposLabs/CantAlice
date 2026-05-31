@@ -13,14 +13,13 @@ export function VersionBadge() {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="fixed bottom-20 right-3 z-30 flex items-center gap-1 lg:bottom-3">
+    <div className="fixed bottom-24 right-3 z-50 flex items-center gap-1 lg:bottom-3">
       <button
         onClick={() => setExpanded((e) => !e)}
         title={`Versão ${version} · build ${buildId}`}
         className="rounded-full bg-white/5 px-2 py-1 font-mono text-[10px] text-mist/40 backdrop-blur transition-colors hover:text-mist/80"
       >
-        v{version}
-        {expanded && <span className="text-mist/30"> · {buildShort}</span>}
+        v{version} <span className="text-mist/30">· {expanded ? buildId : buildShort}</span>
       </button>
       <button
         onClick={() => applyUpdate()}

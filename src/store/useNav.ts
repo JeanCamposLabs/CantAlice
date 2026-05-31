@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand'
 
-export type View = 'home' | 'search' | 'library' | 'vocab' | 'song'
+export type View = 'home' | 'search' | 'library' | 'vocab' | 'translate' | 'song'
 
 interface NavState {
   view: View
@@ -16,7 +16,7 @@ interface NavState {
 function parseHash(): { view: View; trackId: string | null } {
   const raw = window.location.hash.replace(/^#\/?/, '')
   const [view, id] = raw.split('/')
-  const valid: View[] = ['home', 'search', 'library', 'vocab', 'song']
+  const valid: View[] = ['home', 'search', 'library', 'vocab', 'translate', 'song']
   if (valid.includes(view as View)) {
     return { view: view as View, trackId: id ?? null }
   }

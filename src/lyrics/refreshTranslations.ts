@@ -24,8 +24,10 @@ export function useRefreshTranslations(): void {
       const words = Object.values(useLibrary.getState().vocab)
       for (const w of words) {
         if (cancelled) return
-        const translation = await translate(w.word)
-        const exampleTranslation = w.example?.text ? await translate(w.example.text) : undefined
+        const translation = await translate(w.word, { premium: true })
+        const exampleTranslation = w.example?.text
+          ? await translate(w.example.text, { premium: true })
+          : undefined
         if (cancelled) return
         useLibrary.getState().refreshWordTranslation(w.word, translation, exampleTranslation)
         await new Promise((r) => setTimeout(r, 80))

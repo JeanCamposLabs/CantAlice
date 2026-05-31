@@ -309,6 +309,11 @@ export function selectVocab(state: LibraryState): VocabWord[] {
   return Object.values(state.vocab).sort((a, b) => b.addedAt - a.addedAt)
 }
 
+/** Look up a saved word by its (normalized) text. */
+export function selectWord(state: LibraryState, word: string): VocabWord | undefined {
+  return state.vocab[normWord(word)]
+}
+
 /** The streak count, but only if it's still "alive" (practised today/yesterday). */
 export function currentStreak(state: LibraryState): number {
   const { count, lastDate } = state.streak

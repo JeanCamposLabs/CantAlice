@@ -27,6 +27,7 @@ import {
 import { getCurrentUser } from './spotify/api'
 import { playerController } from './spotify/player'
 import { useCloudSync } from './sync/sync'
+import { useRefreshTranslations } from './lyrics/refreshTranslations'
 import { IS_SPOTIFY_CONFIGURED } from './config'
 
 export function App() {
@@ -40,6 +41,9 @@ export function App() {
   // Cloud sync (no-op until Supabase is configured): pulls + merges progress on
   // login and keeps it synced across devices, tied to the Spotify account.
   useCloudSync()
+
+  // One-time re-translation of saved words when the translator improves.
+  useRefreshTranslations()
 
   // — Bootstrap: handle OAuth return, restore session, init player —
   useEffect(() => {

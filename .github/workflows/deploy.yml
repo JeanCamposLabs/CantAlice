@@ -42,11 +42,11 @@ jobs:
           # The Spotify Client ID is public (PKCE flow has no secret), so a
           # repository *variable* named SPOTIFY_CLIENT_ID is the cleanest place
           # for it. If unset, the value baked into src/config.ts is used.
-          VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
-          # Optional cloud sync (Supabase). Set these as repository variables to
-          # enable cross-device progress tied to the Spotify account.
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID || secrets.SPOTIFY_CLIENT_ID }}
+          # Optional cloud sync (Supabase). Set these as repository Variables
+          # (recommended) OR Secrets — either works thanks to the fallback.
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
           # Unique per commit — lets the running app detect new deploys and
           # prompt/refresh automatically (see src/hooks/useAppUpdate.ts).
           VITE_APP_VERSION: ${{ github.sha }}

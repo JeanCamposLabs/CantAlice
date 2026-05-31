@@ -84,6 +84,42 @@ https://SEU_USUARIO.github.io/CantAlice/
 
 ---
 
+## ☁️ Sincronização na nuvem (opcional, mas recomendado)
+
+Por padrão, o progresso (músicas, vocabulário, sequência) fica salvo **no
+navegador** (localStorage). Isso é privado e simples, mas no iOS pode ser
+apagado ao limpar dados do Safari e **não sincroniza entre aparelhos**.
+
+Ative a **sincronização na nuvem** para que o progresso fique **vinculado à
+conta do Spotify** e acompanhe a Alice no iPad e no celular. Usamos o
+[Supabase](https://supabase.com) (gratuito) — sem servidor próprio.
+
+1. Crie um projeto grátis no [Supabase](https://supabase.com/dashboard).
+2. **SQL Editor → New query**: cole e rode o conteúdo de
+   [`supabase/schema.sql`](supabase/schema.sql) (cria a tabela e tranca o acesso
+   com RLS).
+3. **Edge Functions → Create a function**, nome **`progress`**, cole o conteúdo
+   de [`supabase/functions/progress/index.ts`](supabase/functions/progress/index.ts)
+   e **Deploy**. (Ou via CLI: `supabase functions deploy progress`.)
+4. Em **Project Settings → API**, copie o **Project URL** e a **anon public key**.
+5. No GitHub, em **Settings → Secrets and variables → Actions → Variables**,
+   crie duas variáveis:
+   - `SUPABASE_URL` → o Project URL (ex.: `https://xxxx.supabase.co`)
+   - `SUPABASE_ANON_KEY` → a anon public key
+6. Rode o deploy de novo. Pronto — ao conectar o Spotify, o progresso passa a
+   sincronizar entre os aparelhos.
+
+**Como é seguro:** a *anon key* é pública por natureza. A tabela fica trancada
+por RLS (ninguém acessa direto com ela). Só a Edge Function acessa os dados, e
+ela **verifica a identidade pelo token do Spotify** (chama `/me`), então cada
+pessoa só lê/grava o próprio progresso. A *service role key* nunca sai do
+Supabase.
+
+> Sem essas variáveis, o app continua funcionando normalmente, só que o
+> progresso fica apenas no aparelho.
+
+---
+
 ## 💻 Rodando localmente
 
 ```bash

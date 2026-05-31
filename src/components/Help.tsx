@@ -4,7 +4,7 @@ import {
   Search,
   MicVocal,
   Languages,
-  GraduationCap,
+  Brain,
   RefreshCw,
   LogIn,
   Crown,
@@ -30,12 +30,12 @@ const TIPS = [
   {
     icon: Languages,
     title: 'Entenda tudo',
-    text: 'Veja a tradução embaixo de cada linha e toque em qualquer palavra para guardá-la no vocabulário.',
+    text: 'Veja a tradução embaixo de cada linha e toque em qualquer palavra para guardá-la com uma frase de exemplo de verdade.',
   },
   {
-    icon: GraduationCap,
-    title: 'Acompanhe o progresso',
-    text: 'Guarde o que quer aprender e marque “Já sei” quando dominar uma música.',
+    icon: Brain,
+    title: 'Revise na hora certa',
+    text: 'Cada palavra guardada vira cartões (inglês↔português, com a frase). O app usa repetição espaçada (FSRS) e mostra na aba Vocabulário quantos estão prontos para revisar.',
   },
 ]
 

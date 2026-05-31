@@ -98,8 +98,12 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
     }
   }, [isSynced, showTranslations, lines])
 
-  const onWordClick = (word: string, e: React.MouseEvent<HTMLButtonElement>) => {
-    setSelection({ word, rect: e.currentTarget.getBoundingClientRect(), songName })
+  const onWordClick = (
+    word: string,
+    line: string,
+    e: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    setSelection({ word, rect: e.currentTarget.getBoundingClientRect(), songName, line })
   }
 
   if (lines.length === 0) return null
@@ -156,7 +160,7 @@ const LyricLineRow = ({
   large: boolean
   state: LineState
   translation?: string
-  onWordClick: (word: string, e: React.MouseEvent<HTMLButtonElement>) => void
+  onWordClick: (word: string, line: string, e: React.MouseEvent<HTMLButtonElement>) => void
   onSeek?: () => void
 }) => {
   // Tokenise into words + whitespace so we can make words individually tappable.
@@ -217,7 +221,7 @@ const LyricLineRow = ({
               key={ti}
               onClick={(e) => {
                 e.stopPropagation()
-                onWordClick(tok, e)
+                onWordClick(tok, line.text, e)
               }}
               className="rounded-md decoration-rose-400/40 underline-offset-4 transition-colors hover:bg-rose-400/15 hover:text-rose-200 hover:underline"
             >

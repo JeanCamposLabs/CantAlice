@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { BookmarkPlus, BookmarkCheck, Loader2, Volume2 } from 'lucide-react'
 import { translate } from '../lyrics/translate'
+import { fetchExample, type Example } from '../lyrics/examples'
 import { useLibrary } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
 
@@ -11,6 +12,24 @@ export interface WordSelection {
   /** Bounding rect of the tapped word, in viewport coordinates. */
   rect: DOMRect
   songName: string | null
+  /** The lyric line the word was tapped in (used as an example fallback). */
+  line?: string
+}
+
+/** Wrap occurrences of `word` (stem match) in <strong> for the example phrase. */
+function emphasize(text: string, word: string): React.ReactNode {
+  const re = new RegExp(`(\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i')
+  const parts = text.split(re)
+  if (parts.length === 1) return text
+  return parts.map((p, i) =>
+    re.test(p) ? (
+      <strong key={i} className="text-cream">
+        {p}
+      </strong>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
+  )
 }
 
 /**
@@ -26,9 +45,12 @@ export function WordPopover({
 }) {
   const [translation, setTranslation] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [example, setExample] = useState<Example | null>(null)
+  const [exampleLoading, setExampleLoading] = useState(true)
   const hasWord = useLibrary((s) => s.hasWord(selection.word))
   const addWord = useLibrary((s) => s.addWord)
   const removeWord = useLibrary((s) => s.removeWord)
+  const setWordExample = useLibrary((s) => s.setWordExample)
 
   const cleanWord = selection.word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')
 
@@ -47,6 +69,23 @@ export function WordPopover({
     }
   }, [cleanWord])
 
+  // Fetch a real-world example phrase (Reverso-Context style) for the word.
+  useEffect(() => {
+    let alive = true
+    setExampleLoading(true)
+    setExample(null)
+    fetchExample(cleanWord, selection.line).then((ex) => {
+      if (!alive) return
+      setExample(ex)
+      setExampleLoading(false)
+      // If the word is already saved without an example, fill it in.
+      if (ex) setWordExample(cleanWord, ex)
+    })
+    return () => {
+      alive = false
+    }
+  }, [cleanWord, selection.line, setWordExample])
+
   // Close on outside click / escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -55,7 +94,7 @@ export function WordPopover({
   }, [onClose])
 
   // Position: centered above the word, clamped to the viewport.
-  const width = 240
+  const width = 280
   const left = Math.min(
     Math.max(12, selection.rect.left + selection.rect.width / 2 - width / 2),
     window.innerWidth - width - 12,
@@ -98,12 +137,33 @@ export function WordPopover({
           )}
         </div>
 
+        {/* Real-world example phrase (Reverso-Context style) */}
+        <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
+          <div className="text-[0.65rem] uppercase tracking-[0.18em] text-mist/45">Exemplo</div>
+          {exampleLoading ? (
+            <span className="mt-1 flex items-center gap-2 text-sm text-mist/50">
+              <Loader2 size={14} className="animate-spin" /> buscando frase…
+            </span>
+          ) : example ? (
+            <>
+              <p className="mt-0.5 text-sm leading-snug text-mist/85">
+                {emphasize(example.text, cleanWord)}
+              </p>
+              <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">
+                {example.translation}
+              </p>
+            </>
+          ) : (
+            <p className="mt-0.5 text-sm text-mist/50">Sem frase de exemplo desta vez.</p>
+          )}
+        </div>
+
         <button
           disabled={loading}
           onClick={() =>
             hasWord
               ? removeWord(cleanWord)
-              : addWord(cleanWord, translation ?? '', selection.songName)
+              : addWord(cleanWord, translation ?? '', selection.songName, example)
           }
           className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
             hasWord

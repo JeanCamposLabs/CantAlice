@@ -58,7 +58,7 @@ export function WordPopover({
     let alive = true
     setLoading(true)
     setTranslation(null)
-    translate(cleanWord).then((t) => {
+    translate(cleanWord, { premium: true }).then((t) => {
       if (alive) {
         setTranslation(t)
         setLoading(false)

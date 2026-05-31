@@ -1,4 +1,4 @@
-import { Home, Search, Library, BookHeart, LogOut, LogIn, HelpCircle } from 'lucide-react'
+import { Home, Search, Library, BookHeart, Languages, LogOut, LogIn, HelpCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useNav, type View } from '../store/useNav'
@@ -14,6 +14,7 @@ const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
   { view: 'search', label: 'Buscar', icon: Search },
   { view: 'library', label: 'Minhas músicas', icon: Library },
   { view: 'vocab', label: 'Vocabulário', icon: BookHeart },
+  { view: 'translate', label: 'Tradutor', icon: Languages },
 ]
 
 function NavButton({

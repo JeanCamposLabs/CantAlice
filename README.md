@@ -137,6 +137,30 @@ Supabase.
 
 ---
 
+## 🌎 Tradutor + exemplos (opcional: DeepL)
+
+O app tem uma aba **Tradutor** (estilo Reverso Context): traduz palavras/frases e
+mostra **exemplos reais bilíngues** (do [Tatoeba](https://tatoeba.org), corpus
+aberto), que dá pra guardar direto no baralho de revisão.
+
+A tradução já funciona sem configurar nada (usa o Google gratuito). Para usar o
+**DeepL** (qualidade ainda melhor), publique a segunda Edge Function e guarde a
+chave como **secret** (ela nunca vai para o navegador):
+
+1. **Edge Functions → Create a function**, nome **`translate`**, cole o conteúdo
+   de [`supabase/functions/translate/index.ts`](supabase/functions/translate/index.ts)
+   e **Deploy**. (Ou via CLI: `supabase functions deploy translate`.)
+2. Pegue uma chave grátis em [DeepL API Free](https://www.deepl.com/pro-api)
+   (500 mil caracteres/mês) e guarde como secret:
+   - No painel: **Edge Functions → translate → Secrets → Add** `DEEPL_API_KEY`.
+   - Ou via CLI: `supabase secrets set DEEPL_API_KEY=suachave:fx`
+     (a chave grátis termina em `:fx`).
+
+Sem o DeepL, a função ainda serve os exemplos do Tatoeba e a tradução cai no
+Google automaticamente. O Tatoeba é proxyado pela função porque não tem CORS.
+
+---
+
 ## 💻 Rodando localmente
 
 ```bash

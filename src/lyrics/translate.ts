@@ -9,6 +9,7 @@
  * vocabulary words repeat constantly.
  */
 import { TRANSLATE_BASE } from '../config'
+import { backendTranslate, IS_TRANSLATE_BACKEND } from './backend'
 
 const GOOGLE_BASE = 'https://translate.googleapis.com/translate_a/single'
 
@@ -83,35 +84,32 @@ function persist(): void {
   }, 600)
 }
 
-/** Translate a single English string to Portuguese (pt-BR). */
-export async function translate(text: string): Promise<string> {
+/**
+ * Translate a single English string to Portuguese (pt-BR).
+ *
+ * `premium` routes through DeepL (via the Supabase function) when configured —
+ * use it where precision matters most (vocabulary, the translator tool). Plain
+ * calls use Google, which is fast and free — ideal for the high-volume karaoke
+ * lyric stream. Premium and standard results are cached separately.
+ */
+export async function translate(text: string, opts: { premium?: boolean } = {}): Promise<string> {
   const clean = text.trim()
   if (!clean) return ''
-  const key = clean.toLowerCase()
+  const premium = Boolean(opts.premium) && IS_TRANSLATE_BACKEND
+  const key = (premium ? 'd:' : 'g:') + clean.toLowerCase()
   const cached = MEMORY.get(key)
   if (cached !== undefined) return cached
 
-  // Google first (best quality), then MyMemory.
-  const translated = (await googleTranslate(clean)) ?? (await myMemoryTranslate(clean))
+  let translated: string | null = null
+  if (premium) translated = (await backendTranslate([clean]))?.[0] ?? null
+  if (!translated) translated = await googleTranslate(clean)
+  if (!translated) translated = await myMemoryTranslate(clean)
+
   if (translated) {
     MEMORY.set(key, translated)
     persist()
     return translated
   }
-  // Both failed — echo the input but don't cache it, so we retry next time.
+  // All providers failed — echo the input but don't cache it, so we retry.
   return clean
-}
-
-/** Translate many lines, lightly throttled to stay friendly to the API. */
-export async function translateMany(texts: string[]): Promise<string[]> {
-  const out: string[] = []
-  for (const t of texts) {
-    const wasCached = MEMORY.has(t.trim().toLowerCase())
-    out.push(await translate(t))
-    // Small gap between uncached (network) requests; cached ones are instant.
-    if (!wasCached) {
-      await new Promise((r) => setTimeout(r, 120))
-    }
-  }
-  return out
 }

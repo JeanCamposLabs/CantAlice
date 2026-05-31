@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { AuroraBackground } from './components/AuroraBackground'
 import { FloatingNotes } from './components/FloatingNotes'
 import { Sidebar, MobileBar, MobileTopBar } from './components/Nav'
@@ -117,19 +117,19 @@ export function App() {
         <div className="flex min-w-0 flex-1 flex-col">
           <MobileTopBar />
           <main className="flex-1 px-5 pb-28 pt-6 sm:px-8 lg:px-10 lg:pb-12 lg:pt-10">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={view}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <ErrorBoundary resetKey={view}>
-                  <Page view={view} />
-                </ErrorBoundary>
-              </motion.div>
-            </AnimatePresence>
+            {/* Keyed (not AnimatePresence) so navigating always mounts the next
+                page immediately — a "wait" exit could otherwise deadlock and
+                leave the new tab blank. */}
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <ErrorBoundary resetKey={view}>
+                <Page view={view} />
+              </ErrorBoundary>
+            </motion.div>
           </main>
         </div>
       </div>

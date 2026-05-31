@@ -74,7 +74,7 @@ export function WordPopover({
     let alive = true
     setExampleLoading(true)
     setExample(null)
-    fetchExample(cleanWord, selection.line).then((ex) => {
+    fetchExample(cleanWord).then((ex) => {
       if (!alive) return
       setExample(ex)
       setExampleLoading(false)
@@ -84,7 +84,7 @@ export function WordPopover({
     return () => {
       alive = false
     }
-  }, [cleanWord, selection.line, setWordExample])
+  }, [cleanWord, setWordExample])
 
   // Close on outside click / escape.
   useEffect(() => {

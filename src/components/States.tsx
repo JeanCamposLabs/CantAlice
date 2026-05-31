@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { KeyRound, Music2, Wifi } from 'lucide-react'
 import { beginLogin } from '../spotify/auth'
+import { useUI } from '../store/useUI'
 
 /** Generic empty state with an icon, title and helper text. */
 export function EmptyState({
@@ -77,15 +78,24 @@ export function SetupNotice() {
 
 /** Shown when a feature needs Spotify login. */
 export function ConnectGate({ feature }: { feature: string }) {
+  const openRequestAccess = useUI((s) => s.openRequestAccess)
   return (
     <EmptyState
       icon={<Music2 size={34} />}
       title="Conecte seu Spotify"
       description={`Conecte sua conta do Spotify para ${feature}.`}
       action={
-        <button onClick={() => beginLogin()} className="btn-primary">
-          Conectar com o Spotify
-        </button>
+        <div className="flex flex-col items-center gap-3">
+          <button onClick={() => beginLogin()} className="btn-primary">
+            Conectar com o Spotify
+          </button>
+          <button
+            onClick={openRequestAccess}
+            className="text-sm text-mist/60 underline-offset-4 transition-colors hover:text-cream hover:underline"
+          >
+            Não consegue conectar? Pedir acesso
+          </button>
+        </div>
       }
     />
   )

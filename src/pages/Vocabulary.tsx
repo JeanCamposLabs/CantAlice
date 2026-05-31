@@ -8,11 +8,13 @@ import {
   RotateCcw,
   List,
   Layers,
+  Volume2,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useLibrary, selectVocab, type VocabWord } from '../store/useLibrary'
 import { EmptyState } from '../components/States'
+import { speak, canSpeak } from '../lib/speak'
 
 export function VocabularyPage() {
   const words = useLibrary(useShallow(selectVocab))
@@ -104,7 +106,18 @@ function WordList({ words }: { words: VocabWord[] }) {
             className="glass group flex items-start gap-3 rounded-2xl p-4"
           >
             <div className="min-w-0 flex-1">
-              <div className="font-display text-xl text-cream">{w.word}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-xl text-cream">{w.word}</span>
+                {canSpeak && (
+                  <button
+                    onClick={() => speak(w.word)}
+                    title="Ouvir pronúncia"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15"
+                  >
+                    <Volume2 size={14} />
+                  </button>
+                )}
+              </div>
               <div className="text-rose-300">{w.translation}</div>
               {w.songName && (
                 <div className="mt-1 truncate text-xs text-mist/45">de “{w.songName}”</div>
@@ -177,7 +190,19 @@ function Flashcards({ words }: { words: VocabWord[] }) {
           >
             <span className="text-xs uppercase tracking-[0.25em] text-mist/50">Inglês</span>
             <span className="font-display text-5xl text-glow">{card.word}</span>
-            <span className="mt-2 text-sm text-mist/50">toque para ver a tradução</span>
+            {canSpeak && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  speak(card.word)
+                }}
+                title="Ouvir pronúncia"
+                className="flex items-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm text-aurora-3 transition-colors hover:bg-white/15"
+              >
+                <Volume2 size={16} /> Ouvir
+              </button>
+            )}
+            <span className="mt-1 text-sm text-mist/50">toque no cartão para ver a tradução</span>
           </div>
           {/* Back: Portuguese */}
           <div

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { BookmarkPlus, BookmarkCheck, Loader2 } from 'lucide-react'
+import { BookmarkPlus, BookmarkCheck, Loader2, Volume2 } from 'lucide-react'
 import { translate } from '../lyrics/translate'
 import { useLibrary } from '../store/useLibrary'
+import { speak, canSpeak } from '../lib/speak'
 
 export interface WordSelection {
   word: string
@@ -74,7 +75,18 @@ export function WordPopover({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-xs uppercase tracking-[0.18em] text-mist/50">Inglês</div>
-        <div className="font-display text-2xl text-cream">{cleanWord}</div>
+        <div className="flex items-center gap-2">
+          <span className="font-display text-2xl text-cream">{cleanWord}</span>
+          {canSpeak && (
+            <button
+              onClick={() => speak(cleanWord)}
+              title="Ouvir pronúncia"
+              className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15"
+            >
+              <Volume2 size={16} />
+            </button>
+          )}
+        </div>
 
         <div className="mt-2 min-h-[1.75rem] text-lg text-rose-300">
           {loading ? (

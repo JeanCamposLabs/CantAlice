@@ -1,14 +1,20 @@
-import { Sparkles, GraduationCap, BookHeart, Search, Music2, Heart, Play } from 'lucide-react'
+import { Sparkles, GraduationCap, BookHeart, Search, Music2, Heart, Play, Flame } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useSession } from '../store/useSession'
-import { useLibrary, selectSongs, selectVocab, type SavedSong } from '../store/useLibrary'
+import {
+  useLibrary,
+  selectSongs,
+  selectVocab,
+  currentStreak,
+  type SavedSong,
+} from '../store/useLibrary'
 import { useNav } from '../store/useNav'
 import { beginLogin } from '../spotify/auth'
 import { getTrack } from '../spotify/api'
 import { AlbumArt } from '../components/AlbumArt'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
-import { greeting } from '../lib/format'
+import { greeting, plural } from '../lib/format'
 import { SetupNotice } from '../components/States'
 import { Brand } from '../components/Brand'
 
@@ -99,6 +105,7 @@ function Dashboard({ name }: { name: string }) {
   const learning = useLibrary(useShallow((s) => selectSongs(s, 'learning')))
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const vocab = useLibrary(useShallow(selectVocab))
+  const streak = useLibrary(currentStreak)
   const go = useNav((s) => s.go)
 
   const recent = [...learning, ...known]
@@ -111,7 +118,7 @@ function Dashboard({ name }: { name: string }) {
       <Hero name={name} />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
           icon={<Sparkles />}
           value={learning.length}
@@ -132,6 +139,13 @@ function Dashboard({ name }: { name: string }) {
           label="Palavras"
           tone="aurora"
           onClick={() => go('vocab')}
+        />
+        <StatCard
+          icon={<Flame />}
+          value={streak}
+          label={`${plural(streak, 'dia', 'dias')} seguidos`}
+          tone="flame"
+          onClick={() => go('search')}
         />
       </div>
 
@@ -213,6 +227,7 @@ const TONES = {
   rose: 'from-rose-400/25 to-rose-400/5 text-rose-300',
   gold: 'from-gold/25 to-gold/5 text-gold',
   aurora: 'from-aurora-1/25 to-aurora-1/5 text-aurora-1',
+  flame: 'from-peach/25 to-peach/5 text-peach',
 } as const
 
 function StatCard({

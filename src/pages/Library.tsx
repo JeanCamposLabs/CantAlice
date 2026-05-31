@@ -3,6 +3,7 @@ import { Play, Trash2, GraduationCap, Sparkles, Music2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { AlbumArt } from '../components/AlbumArt'
+import { useUI } from '../store/useUI'
 import {
   useLibrary,
   selectSongs,
@@ -98,6 +99,7 @@ function SongRow({ song }: { song: SavedSong }) {
   const setActiveTrack = useSession((s) => s.setActiveTrack)
   const removeSong = useLibrary((s) => s.removeSong)
   const setStatus = useLibrary((s) => s.setStatus)
+  const celebrate = useUI((s) => s.celebrate)
 
   const open = async () => {
     // We stored a lightweight snapshot; re-fetch the full track for playback.
@@ -140,7 +142,10 @@ function SongRow({ song }: { song: SavedSong }) {
       <div className="flex items-center gap-1.5">
         {song.status === 'learning' ? (
           <button
-            onClick={() => setStatus(song.id, 'known')}
+            onClick={() => {
+              setStatus(song.id, 'known')
+              celebrate('Mais uma que você já sabe cantar!')
+            }}
             title="Marcar como já sei"
             className="rounded-xl px-3 py-2 text-xs font-semibold text-gold transition-colors hover:bg-gold/15"
           >

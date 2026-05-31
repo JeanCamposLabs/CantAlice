@@ -9,10 +9,12 @@ import {
   Crown,
   Disc3,
   Hand,
+  Type,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNav } from '../store/useNav'
 import { useSession } from '../store/useSession'
+import { useUI } from '../store/useUI'
 import { useLibrary } from '../store/useLibrary'
 import { getTrack, type SpotifyTrack } from '../spotify/api'
 import { fetchLyrics, type LyricsResult } from '../lyrics/lrclib'
@@ -92,8 +94,11 @@ function KaraokeStage({
   const markPracticed = useLibrary((s) => s.markPracticed)
   const showTranslations = useLibrary((s) => s.showTranslations)
   const toggleTranslations = useLibrary((s) => s.toggleTranslations)
+  const largeLyrics = useLibrary((s) => s.largeLyrics)
+  const toggleLargeLyrics = useLibrary((s) => s.toggleLargeLyrics)
   const wordHintSeen = useLibrary((s) => s.wordHintSeen)
   const markWordHintSeen = useLibrary((s) => s.markWordHintSeen)
+  const celebrate = useUI((s) => s.celebrate)
 
   const practicedFor = useRef<string | null>(null)
 
@@ -182,9 +187,20 @@ function KaraokeStage({
 
         {/* Actions */}
         <div className="mt-6 flex flex-wrap gap-2 lg:mt-auto lg:pt-6">
-          <button onClick={toggleTranslations} className="btn-ghost flex-1 text-sm">
+          <button
+            onClick={toggleTranslations}
+            className={`btn-ghost flex-1 text-sm ${showTranslations ? 'text-rose-200' : ''}`}
+          >
             <Languages size={16} />
             {showTranslations ? 'Tradução: ligada' : 'Tradução: desligada'}
+          </button>
+
+          <button
+            onClick={toggleLargeLyrics}
+            title="Letra grande"
+            className={`btn-ghost text-sm ${largeLyrics ? 'text-aurora-3' : ''}`}
+          >
+            <Type size={16} /> Letra grande
           </button>
 
           {status_ === 'known' ? (
@@ -196,7 +212,10 @@ function KaraokeStage({
             </button>
           ) : status_ === 'learning' ? (
             <button
-              onClick={() => setSongStatus(track.id, 'known')}
+              onClick={() => {
+                setSongStatus(track.id, 'known')
+                celebrate('Mais uma que você já sabe cantar!')
+              }}
               className="btn-ghost text-sm text-gold"
             >
               <GraduationCap size={16} /> Já sei!

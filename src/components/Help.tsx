@@ -45,8 +45,7 @@ export function Help() {
   const auth = useSession((s) => s.auth)
   const isPremium = useSession((s) => s.isPremium)
 
-  const version =
-    typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__.slice(0, 7) : 'dev'
+  const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
   return (
     <AnimatePresence>

@@ -7,6 +7,7 @@ import { UpdatePrompt } from './components/UpdatePrompt'
 import { Help } from './components/Help'
 import { Celebration } from './components/Celebration'
 import { InstallPrompt } from './components/InstallPrompt'
+import { VersionBadge } from './components/VersionBadge'
 import { HomePage } from './pages/Home'
 import { SearchPage } from './pages/Search'
 import { LibraryPage } from './pages/Library'
@@ -116,6 +117,7 @@ export function App() {
       <InstallPrompt />
       <Help />
       <Celebration />
+      <VersionBadge />
 
       {!IS_SPOTIFY_CONFIGURED && <ConfigBadge />}
     </>

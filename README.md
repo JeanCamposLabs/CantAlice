@@ -84,6 +84,23 @@ https://SEU_USUARIO.github.io/CantAlice/
 
 ---
 
+## 🔑 Liberar acesso para outras pessoas
+
+O app do Spotify começa em **Development Mode**, então só contas que você
+adicionar (em **Dashboard → seu app → User Management**) conseguem conectar.
+Para facilitar, o site tem um botão **"Pedir acesso"**: quem for barrado
+informa o e-mail do Spotify e envia para você num toque.
+
+Para o envio em um toque, defina (opcional) o seu contato — como variáveis de
+build ou editando `OWNER` em `src/config.ts`:
+
+- `VITE_OWNER_WHATSAPP` — só números, com código do país (ex.: `5511999998888`)
+- `VITE_OWNER_EMAIL` — seu e-mail
+
+Sem isso, o botão ainda funciona oferecendo "copiar mensagem".
+
+---
+
 ## ☁️ Sincronização na nuvem (opcional, mas recomendado)
 
 Por padrão, o progresso (músicas, vocabulário, sequência) fica salvo **no

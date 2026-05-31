@@ -10,6 +10,7 @@ import {
   type SavedSong,
 } from '../store/useLibrary'
 import { useNav } from '../store/useNav'
+import { useUI } from '../store/useUI'
 import { beginLogin } from '../spotify/auth'
 import { getTrack } from '../spotify/api'
 import { AlbumArt } from '../components/AlbumArt'
@@ -59,7 +60,15 @@ function Welcome() {
         <button onClick={() => beginLogin()} className="btn-primary text-lg">
           <Music2 size={20} /> Conectar com o Spotify
         </button>
-        <p className="text-sm text-mist/45">É grátis e seguro — usamos o login oficial do Spotify.</p>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-sm text-mist/45">É grátis e seguro — usamos o login oficial do Spotify.</p>
+          <button
+            onClick={() => useUI.getState().openRequestAccess()}
+            className="text-sm text-mist/55 underline-offset-4 transition-colors hover:text-cream hover:underline"
+          >
+            Não consegue conectar? Pedir acesso
+          </button>
+        </div>
       </motion.div>
 
       <motion.div

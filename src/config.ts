@@ -54,6 +54,21 @@ export const SUPABASE_ANON_KEY =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || ''
 export const IS_CLOUD_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
+export const APP_NAME = 'Canta, Alice'
+
+/**
+ * Owner contact, used by the in-app "Pedir acesso" (request access) flow so a
+ * blocked user can send you their Spotify email to be added to the app's
+ * allow-list. All optional — set via env (VITE_OWNER_EMAIL / VITE_OWNER_WHATSAPP)
+ * or edit here. WhatsApp must be digits only, with country code (e.g. 5511999998888).
+ * If both are empty, the flow still offers "copy message".
+ */
+export const OWNER = {
+  name: 'Jean',
+  email: (import.meta.env.VITE_OWNER_EMAIL as string | undefined)?.trim() || '',
+  whatsapp: (import.meta.env.VITE_OWNER_WHATSAPP as string | undefined)?.trim() || '',
+}
+
 
 /** LRClib — free, open, no-key synced-lyrics API. */
 export const LRCLIB_BASE = 'https://lrclib.net/api'

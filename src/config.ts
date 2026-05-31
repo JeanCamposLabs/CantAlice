@@ -40,6 +40,21 @@ export const SPOTIFY_SCOPES = [
 
 export const IS_SPOTIFY_CONFIGURED = SPOTIFY_CLIENT_ID !== 'PASTE_YOUR_SPOTIFY_CLIENT_ID_HERE'
 
+/**
+ * Optional cloud sync (Supabase). When configured, progress is saved to the
+ * cloud keyed by the user's Spotify account, so it survives cache clears and
+ * syncs across devices. Leave empty to run purely on-device (localStorage).
+ *
+ * Set these as build-time env vars (or GitHub Actions repository variables):
+ *   VITE_SUPABASE_URL       e.g. https://abcdefgh.supabase.co
+ *   VITE_SUPABASE_ANON_KEY  the project's public anon key
+ */
+export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || ''
+export const SUPABASE_ANON_KEY =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || ''
+export const IS_CLOUD_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
+
+
 /** LRClib — free, open, no-key synced-lyrics API. */
 export const LRCLIB_BASE = 'https://lrclib.net/api'
 

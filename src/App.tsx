@@ -23,6 +23,7 @@ import {
 } from './spotify/auth'
 import { getCurrentUser } from './spotify/api'
 import { playerController } from './spotify/player'
+import { useCloudSync } from './sync/sync'
 import { IS_SPOTIFY_CONFIGURED } from './config'
 
 export function App() {
@@ -30,6 +31,10 @@ export function App() {
   const setAuth = useSession((s) => s.setAuth)
   const setUser = useSession((s) => s.setUser)
   const [authError, setAuthError] = useState<string | null>(null)
+
+  // Cloud sync (no-op until Supabase is configured): pulls + merges progress on
+  // login and keeps it synced across devices, tied to the Spotify account.
+  useCloudSync()
 
   // — Bootstrap: handle OAuth return, restore session, init player —
   useEffect(() => {

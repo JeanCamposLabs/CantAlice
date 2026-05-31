@@ -1,14 +1,60 @@
 /**
- * English → Portuguese translation via MyMemory — a free, CORS-friendly,
- * no-key translation API (with a generous anonymous daily quota).
+ * English → Portuguese (pt-BR) translation.
+ *
+ * Primary provider is Google's free, CORS-friendly, no-key endpoint, which is
+ * markedly more accurate than the alternatives (correct word senses, natural
+ * sentences). MyMemory is kept as a fallback for the rare case Google fails.
  *
  * We cache aggressively in memory + localStorage because lyric lines and
- * vocabulary words repeat constantly, and the quota is per-day.
+ * vocabulary words repeat constantly.
  */
 import { TRANSLATE_BASE } from '../config'
 
+const GOOGLE_BASE = 'https://translate.googleapis.com/translate_a/single'
+
+/** Google's free endpoint — best quality, no key, CORS-enabled. */
+async function googleTranslate(text: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({ client: 'gtx', sl: 'en', tl: 'pt', dt: 't', q: text })
+    const res = await fetch(`${GOOGLE_BASE}?${params}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    // Shape: [ [ [translatedSegment, originalSegment, …], … ], … ]. Join all
+    // segments so long lyric lines (which Google splits) come back whole.
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return null
+    const out = data[0]
+      .map((seg: unknown) => (Array.isArray(seg) ? (seg[0] as string) : ''))
+      .join('')
+      .trim()
+    return out || null
+  } catch {
+    return null
+  }
+}
+
+/** MyMemory fallback — free, but lower quality; used only if Google fails. */
+async function myMemoryTranslate(text: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({ q: text, langpair: 'en|pt-BR' })
+    const res = await fetch(`${TRANSLATE_BASE}?${params}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    const out: string = data?.responseData?.translatedText ?? ''
+    // MyMemory returns ALL-CAPS in-band warnings/quota notices in this field.
+    const looksLikeWarning =
+      !out ||
+      data?.responseStatus === 403 ||
+      /PLEASE SELECT|MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID/i.test(out)
+    return looksLikeWarning ? null : out
+  } catch {
+    return null
+  }
+}
+
 const MEMORY = new Map<string, string>()
-const LS_KEY = 'canta-alice:translations'
+// Bumped to :v2 when switching to Google so old, lower-quality MyMemory
+// translations are discarded and rebuilt with the better provider.
+const LS_KEY = 'canta-alice:translations:v2'
 
 function loadCache(): void {
   try {
@@ -45,28 +91,15 @@ export async function translate(text: string): Promise<string> {
   const cached = MEMORY.get(key)
   if (cached !== undefined) return cached
 
-  try {
-    const params = new URLSearchParams({
-      q: clean,
-      langpair: 'en|pt-BR',
-    })
-    const res = await fetch(`${TRANSLATE_BASE}?${params}`)
-    if (!res.ok) throw new Error('translate failed')
-    const data = await res.json()
-    const out: string = data?.responseData?.translatedText ?? ''
-    // Guard against MyMemory's in-band warning/quota messages, which arrive as
-    // ALL-CAPS notices in the "translatedText" field rather than as errors.
-    const looksLikeWarning =
-      !out ||
-      data?.responseStatus === 403 ||
-      /PLEASE SELECT|MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID/i.test(out)
-    const result = looksLikeWarning ? clean : out
-    MEMORY.set(key, result)
+  // Google first (best quality), then MyMemory.
+  const translated = (await googleTranslate(clean)) ?? (await myMemoryTranslate(clean))
+  if (translated) {
+    MEMORY.set(key, translated)
     persist()
-    return result
-  } catch {
-    return clean
+    return translated
   }
+  // Both failed — echo the input but don't cache it, so we retry next time.
+  return clean
 }
 
 /** Translate many lines, lightly throttled to stay friendly to the API. */

@@ -63,6 +63,8 @@ interface LibraryState {
   dailyNewLimit: number
   /** New cards already introduced today (resets each calendar day). */
   newStudied: { date: string | null; count: number }
+  /** Local-only marker for the one-time translation-quality refresh. */
+  translationsVersion: number
 
   // — song actions —
   addSong: (track: SpotifyTrack, status: SongStatus) => void
@@ -85,6 +87,9 @@ interface LibraryState {
   /** Grade one of a word's two cards (1=Again … 4=Easy) and reschedule it. */
   reviewCard: (word: string, dir: ReviewDir, rating: Rating) => void
   setDailyNewLimit: (n: number) => void
+  /** Replace a saved word's translation (and its example's) after re-translating. */
+  refreshWordTranslation: (word: string, translation: string, exampleTranslation?: string) => void
+  setTranslationsVersion: (v: number) => void
 
   // — preferences —
   setOnboarded: (v: boolean) => void
@@ -150,6 +155,7 @@ export const useLibrary = create<LibraryState>()(
       streak: { count: 0, lastDate: null },
       dailyNewLimit: 20,
       newStudied: { date: null, count: 0 },
+      translationsVersion: 0,
 
       addSong: (track, status) =>
         set((s) => ({
@@ -260,6 +266,28 @@ export const useLibrary = create<LibraryState>()(
         }),
 
       setDailyNewLimit: (n) => set({ dailyNewLimit: Math.max(0, Math.round(n)) }),
+
+      refreshWordTranslation: (word, translation, exampleTranslation) =>
+        set((s) => {
+          const key = normWord(word)
+          const w = s.vocab[key]
+          if (!w) return s
+          return {
+            vocab: {
+              ...s.vocab,
+              [key]: {
+                ...w,
+                translation,
+                example:
+                  w.example && exampleTranslation
+                    ? { ...w.example, translation: exampleTranslation }
+                    : w.example,
+              },
+            },
+          }
+        }),
+
+      setTranslationsVersion: (v) => set({ translationsVersion: v }),
 
       setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),

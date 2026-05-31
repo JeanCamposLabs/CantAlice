@@ -7,18 +7,20 @@ import { applyUpdate } from '../hooks/useAppUpdate'
  * little ↻ forces a refresh to the latest deployed version.
  */
 export function VersionBadge() {
-  const full = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
-  const short = full.length > 7 ? full.slice(0, 7) : full
+  const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
+  const buildId = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev'
+  const buildShort = buildId.length > 7 ? buildId.slice(0, 7) : buildId
   const [expanded, setExpanded] = useState(false)
 
   return (
     <div className="fixed bottom-20 right-3 z-30 flex items-center gap-1 lg:bottom-3">
       <button
         onClick={() => setExpanded((e) => !e)}
-        title={`Versão implantada: ${full}`}
+        title={`Versão ${version} · build ${buildId}`}
         className="rounded-full bg-white/5 px-2 py-1 font-mono text-[10px] text-mist/40 backdrop-blur transition-colors hover:text-mist/80"
       >
-        v{expanded ? full : short}
+        v{version}
+        {expanded && <span className="text-mist/30"> · {buildShort}</span>}
       </button>
       <button
         onClick={() => applyUpdate()}

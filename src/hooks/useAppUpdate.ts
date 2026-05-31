@@ -16,8 +16,9 @@ async function fetchDeployedVersion(): Promise<string | null> {
     const url = `${import.meta.env.BASE_URL}version.json?t=${Date.now()}`
     const res = await fetch(url, { cache: 'no-store' })
     if (!res.ok) return null
-    const data = (await res.json()) as { version?: string }
-    return data.version ?? null
+    const data = (await res.json()) as { buildId?: string; version?: string }
+    // `buildId` is unique per deploy; fall back to `version` for older builds.
+    return data.buildId ?? data.version ?? null
   } catch {
     return null
   }
@@ -34,7 +35,7 @@ export function applyUpdate(version?: string): void {
 export function useAppUpdate(): { updateAvailable: boolean; newVersion: string | null } {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [newVersion, setNewVersion] = useState<string | null>(null)
-  const current = useRef<string>(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev')
+  const current = useRef<string>(typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev')
 
   useEffect(() => {
     let cancelled = false

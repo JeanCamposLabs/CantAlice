@@ -59,12 +59,11 @@ export function useInstallPrompt() {
     if (!deferred) return false
     await deferred.prompt()
     const choice = await deferred.userChoice
-    if (choice.outcome === 'accepted') {
-      deferred = null
-      setCanPromptNative(false)
-      return true
-    }
-    return false
+    // `beforeinstallprompt` is single-use — discard it either way. Chrome will
+    // fire a fresh one on a later visit if she dismissed, re-enabling the button.
+    deferred = null
+    setCanPromptNative(false)
+    return choice.outcome === 'accepted'
   }, [])
 
   return {

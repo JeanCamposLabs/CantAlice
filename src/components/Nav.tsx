@@ -1,8 +1,10 @@
 import { Home, Search, Library, BookHeart, LogOut, LogIn, HelpCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useShallow } from 'zustand/react/shallow'
 import { useNav, type View } from '../store/useNav'
 import { useSession } from '../store/useSession'
 import { useUI } from '../store/useUI'
+import { useLibrary, selectReviewCounts } from '../store/useLibrary'
 import { Brand } from './Brand'
 import { beginLogin, logout } from '../spotify/auth'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
@@ -20,12 +22,14 @@ function NavButton({
   active,
   onClick,
   vertical,
+  badge,
 }: {
   label: string
   icon: typeof Home
   active: boolean
   onClick: () => void
   vertical?: boolean
+  badge?: number
 }) {
   return (
     <button
@@ -43,7 +47,14 @@ function NavButton({
           transition={{ type: 'spring', stiffness: 400, damping: 32 }}
         />
       )}
-      <Icon size={vertical ? 20 : 22} strokeWidth={active ? 2.5 : 2} />
+      <span className="relative">
+        <Icon size={vertical ? 20 : 22} strokeWidth={active ? 2.5 : 2} />
+        {badge && badge > 0 ? (
+          <span className="absolute -right-2 -top-1.5 grid min-w-[1.05rem] place-items-center rounded-full bg-rose-400 px-1 text-[0.6rem] font-bold leading-tight text-night-900">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
+      </span>
       <span className={vertical ? 'text-[0.95rem]' : ''}>{label}</span>
       {active && vertical && (
         <span className="ml-auto h-2 w-2 rounded-full bg-rose-400 shadow-[0_0_12px] shadow-rose-400" />
@@ -128,6 +139,7 @@ function AccountControl({ vertical, compact }: { vertical?: boolean; compact?: b
 
 export function Sidebar() {
   const { view, go } = useNav()
+  const reviewCount = useLibrary(useShallow((s) => selectReviewCounts(s).total))
   return (
     <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 flex-col gap-2 border-r border-white/5 px-5 py-7 lg:flex">
       <div className="px-2">
@@ -139,6 +151,7 @@ export function Sidebar() {
             key={item.view}
             {...item}
             vertical
+            badge={item.view === 'vocab' ? reviewCount : undefined}
             active={view === item.view}
             onClick={() => go(item.view)}
           />
@@ -163,6 +176,7 @@ export function Sidebar() {
 
 export function MobileBar() {
   const { view, go } = useNav()
+  const reviewCount = useLibrary(useShallow((s) => selectReviewCounts(s).total))
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <div className="glass-strong mx-3 mb-3 flex items-center justify-around rounded-3xl px-2 py-1.5">
@@ -170,6 +184,7 @@ export function MobileBar() {
           <NavButton
             key={item.view}
             {...item}
+            badge={item.view === 'vocab' ? reviewCount : undefined}
             active={view === item.view}
             onClick={() => go(item.view)}
           />

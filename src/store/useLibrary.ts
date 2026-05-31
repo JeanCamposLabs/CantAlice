@@ -9,6 +9,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { STORAGE_KEY } from '../config'
 import type { SpotifyTrack } from '../spotify/api'
+import type { Example } from '../lyrics/examples'
+import { type SrsState, type Rating, newCard, isNew, schedule } from '../srs/fsrs'
+
+/** The two cards generated per word: recognize (EN→PT) and produce (PT→EN). */
+export type ReviewDir = 'fwd' | 'rev'
+export interface WordCards {
+  fwd: SrsState
+  rev: SrsState
+}
 
 export type SongStatus = 'learning' | 'known'
 
@@ -30,8 +39,12 @@ export interface SavedSong {
 export interface VocabWord {
   word: string
   translation: string
+  /** A real-world example phrase (Reverso-Context style) + its translation. */
+  example?: Example | null
   songName: string | null
   addedAt: number
+  /** FSRS scheduling state for the word's two cards. */
+  srs?: WordCards
 }
 
 interface LibraryState {
@@ -46,6 +59,10 @@ interface LibraryState {
   largeLyrics: boolean
   /** Daily practice streak. */
   streak: { count: number; lastDate: string | null }
+  /** How many brand-new cards to introduce per day in review. */
+  dailyNewLimit: number
+  /** New cards already introduced today (resets each calendar day). */
+  newStudied: { date: string | null; count: number }
 
   // — song actions —
   addSong: (track: SpotifyTrack, status: SongStatus) => void
@@ -55,9 +72,19 @@ interface LibraryState {
   songStatus: (id: string) => SongStatus | null
 
   // — vocab actions —
-  addWord: (word: string, translation: string, songName: string | null) => void
+  addWord: (
+    word: string,
+    translation: string,
+    songName: string | null,
+    example?: Example | null,
+  ) => void
   removeWord: (word: string) => void
   hasWord: (word: string) => boolean
+  /** Attach an example to a saved word if it doesn't already have one. */
+  setWordExample: (word: string, example: Example) => void
+  /** Grade one of a word's two cards (1=Again … 4=Easy) and reschedule it. */
+  reviewCard: (word: string, dir: ReviewDir, rating: Rating) => void
+  setDailyNewLimit: (n: number) => void
 
   // — preferences —
   setOnboarded: (v: boolean) => void
@@ -76,6 +103,21 @@ function yesterdayKey(): string {
   const d = new Date()
   d.setDate(d.getDate() - 1)
   return todayKey(d)
+}
+
+/** Advance the daily streak (idempotent within the same calendar day). */
+function advanceStreak(streak: { count: number; lastDate: string | null }): {
+  count: number
+  lastDate: string | null
+} {
+  const today = todayKey()
+  if (streak.lastDate === today) return streak
+  const continuing = streak.lastDate === yesterdayKey()
+  return { count: continuing ? streak.count + 1 : 1, lastDate: today }
+}
+
+function freshCards(): WordCards {
+  return { fwd: newCard(), rev: newCard() }
 }
 
 function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
@@ -106,6 +148,8 @@ export const useLibrary = create<LibraryState>()(
       wordHintSeen: false,
       largeLyrics: false,
       streak: { count: 0, lastDate: null },
+      dailyNewLimit: 20,
+      newStudied: { date: null, count: 0 },
 
       addSong: (track, status) =>
         set((s) => ({
@@ -133,16 +177,7 @@ export const useLibrary = create<LibraryState>()(
 
       markPracticed: (id) =>
         set((s) => {
-          // Advance the daily streak (idempotent within the same day).
-          const today = todayKey()
-          let streak = s.streak
-          if (s.streak.lastDate !== today) {
-            const continuing = s.streak.lastDate === yesterdayKey()
-            streak = {
-              count: continuing ? s.streak.count + 1 : 1,
-              lastDate: today,
-            }
-          }
+          const streak = advanceStreak(s.streak)
           const song = s.songs[id]
           return {
             streak,
@@ -161,20 +196,27 @@ export const useLibrary = create<LibraryState>()(
 
       songStatus: (id) => get().songs[id]?.status ?? null,
 
-      addWord: (word, translation, songName) => {
+      addWord: (word, translation, songName, example) => {
         const key = normWord(word)
         if (!key) return
-        set((s) => ({
-          vocab: {
-            ...s.vocab,
-            [key]: {
-              word: word.trim(),
-              translation,
-              songName,
-              addedAt: Date.now(),
+        set((s) => {
+          const existing = s.vocab[key]
+          return {
+            vocab: {
+              ...s.vocab,
+              [key]: {
+                word: word.trim(),
+                translation,
+                // Keep an example we already have if a new one wasn't provided.
+                example: example ?? existing?.example ?? null,
+                songName,
+                addedAt: existing?.addedAt ?? Date.now(),
+                // Never reset review progress when re-saving a word.
+                srs: existing?.srs ?? freshCards(),
+              },
             },
-          },
-        }))
+          }
+        })
       },
 
       removeWord: (word) =>
@@ -185,6 +227,39 @@ export const useLibrary = create<LibraryState>()(
         }),
 
       hasWord: (word) => Boolean(get().vocab[normWord(word)]),
+
+      setWordExample: (word, example) =>
+        set((s) => {
+          const key = normWord(word)
+          const w = s.vocab[key]
+          if (!w || w.example) return s
+          return { vocab: { ...s.vocab, [key]: { ...w, example } } }
+        }),
+
+      reviewCard: (word, dir, rating) =>
+        set((s) => {
+          const key = normWord(word)
+          const w = s.vocab[key]
+          if (!w) return s
+          const cards = w.srs ?? freshCards()
+          const wasNew = isNew(cards[dir])
+          const { state } = schedule(cards[dir], rating)
+          const today = todayKey()
+          const studied =
+            s.newStudied.date === today ? s.newStudied.count : 0
+          return {
+            streak: advanceStreak(s.streak),
+            newStudied: wasNew
+              ? { date: today, count: studied + 1 }
+              : { date: today, count: studied },
+            vocab: {
+              ...s.vocab,
+              [key]: { ...w, srs: { ...cards, [dir]: state } },
+            },
+          }
+        }),
+
+      setDailyNewLimit: (n) => set({ dailyNewLimit: Math.max(0, Math.round(n)) }),
 
       setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),
@@ -211,4 +286,63 @@ export function currentStreak(state: LibraryState): number {
   const { count, lastDate } = state.streak
   if (!lastDate) return 0
   return lastDate === todayKey() || lastDate === yesterdayKey() ? count : 0
+}
+
+// — Spaced-repetition selectors —
+
+export interface ReviewItem {
+  key: string
+  word: VocabWord
+  dir: ReviewDir
+  state: SrsState
+}
+
+const cardsOf = (w: VocabWord): WordCards => w.srs ?? { fwd: newCard(), rev: newCard() }
+
+function remainingNewToday(state: LibraryState): number {
+  const studied = state.newStudied.date === todayKey() ? state.newStudied.count : 0
+  return Math.max(0, state.dailyNewLimit - studied)
+}
+
+/**
+ * Build today's review queue: every card that's due (oldest first), followed by
+ * new cards up to the remaining daily allowance. Recognition (fwd) cards lead
+ * the new ones so a word is recognized before it must be produced.
+ */
+export function selectReviewQueue(state: LibraryState, now = Date.now()): ReviewItem[] {
+  const due: ReviewItem[] = []
+  const newFwd: ReviewItem[] = []
+  const newRev: ReviewItem[] = []
+  for (const [key, word] of Object.entries(state.vocab)) {
+    const cards = cardsOf(word)
+    for (const dir of ['fwd', 'rev'] as const) {
+      const card = cards[dir]
+      if (isNew(card)) (dir === 'fwd' ? newFwd : newRev).push({ key, word, dir, state: card })
+      else if (card.due <= now) due.push({ key, word, dir, state: card })
+    }
+  }
+  due.sort((a, b) => a.state.due - b.state.due)
+  newFwd.sort((a, b) => a.word.addedAt - b.word.addedAt)
+  newRev.sort((a, b) => a.word.addedAt - b.word.addedAt)
+  const fresh = [...newFwd, ...newRev].slice(0, remainingNewToday(state))
+  return [...due, ...fresh]
+}
+
+/** Counts for badges/summaries: cards due now and new cards available today. */
+export function selectReviewCounts(
+  state: LibraryState,
+  now = Date.now(),
+): { due: number; fresh: number; total: number } {
+  let due = 0
+  let newAvailable = 0
+  for (const word of Object.values(state.vocab)) {
+    const cards = cardsOf(word)
+    for (const dir of ['fwd', 'rev'] as const) {
+      const card = cards[dir]
+      if (isNew(card)) newAvailable += 1
+      else if (card.due <= now) due += 1
+    }
+  }
+  const fresh = Math.min(newAvailable, remainingNewToday(state))
+  return { due, fresh, total: due + fresh }
 }

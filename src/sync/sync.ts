@@ -19,6 +19,8 @@ export interface Snapshot {
   songs: Record<string, SavedSong>
   vocab: Record<string, VocabWord>
   streak: { count: number; lastDate: string | null }
+  dailyNewLimit: number
+  newStudied: { date: string | null; count: number }
   showTranslations: boolean
   largeLyrics: boolean
   wordHintSeen: boolean
@@ -32,6 +34,8 @@ function getSnapshot(): Snapshot {
     songs: s.songs,
     vocab: s.vocab,
     streak: s.streak,
+    dailyNewLimit: s.dailyNewLimit,
+    newStudied: s.newStudied,
     showTranslations: s.showTranslations,
     largeLyrics: s.largeLyrics,
     wordHintSeen: s.wordHintSeen,
@@ -45,6 +49,8 @@ function applySnapshot(snap: Snapshot): void {
     songs: snap.songs,
     vocab: snap.vocab,
     streak: snap.streak,
+    dailyNewLimit: snap.dailyNewLimit ?? 20,
+    newStudied: snap.newStudied ?? { date: null, count: 0 },
     showTranslations: snap.showTranslations,
     largeLyrics: snap.largeLyrics,
     wordHintSeen: snap.wordHintSeen,
@@ -53,7 +59,9 @@ function applySnapshot(snap: Snapshot): void {
 }
 
 const songTouched = (s: SavedSong) => Math.max(s.lastPracticedAt ?? 0, s.addedAt)
-const wordTouched = (w: VocabWord) => w.addedAt
+// Use the most recent review so a freshly-graded card wins the merge.
+const wordTouched = (w: VocabWord) =>
+  Math.max(w.addedAt, w.srs?.fwd.lastReview ?? 0, w.srs?.rev.lastReview ?? 0)
 
 /** Merge two snapshots without losing saved items. */
 export function mergeSnapshots(local: Snapshot, cloud: Snapshot | null): Snapshot {
@@ -82,10 +90,22 @@ export function mergeSnapshots(local: Snapshot, cloud: Snapshot | null): Snapsho
   // Preferences: take the more recently updated snapshot.
   const newer = local.updatedAt >= cloud.updatedAt ? local : cloud
 
+  // New-cards-studied counter: keep the later day; max count on the same day.
+  const ln = local.newStudied ?? { date: null, count: 0 }
+  const cn = cloud.newStudied ?? { date: null, count: 0 }
+  const newStudied =
+    (ln.date ?? '') > (cn.date ?? '')
+      ? ln
+      : (cn.date ?? '') > (ln.date ?? '')
+        ? cn
+        : { date: ln.date, count: Math.max(ln.count, cn.count) }
+
   return {
     songs,
     vocab,
     streak,
+    dailyNewLimit: newer.dailyNewLimit ?? 20,
+    newStudied,
     showTranslations: newer.showTranslations,
     largeLyrics: newer.largeLyrics,
     wordHintSeen: local.wordHintSeen || cloud.wordHintSeen,

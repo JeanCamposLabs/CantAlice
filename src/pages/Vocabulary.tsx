@@ -1,24 +1,21 @@
 import { useState } from 'react'
-import {
-  BookHeart,
-  Trash2,
-  Shuffle,
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw,
-  List,
-  Layers,
-  Volume2,
-} from 'lucide-react'
+import { BookHeart, Trash2, List, Volume2, Brain } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
-import { useLibrary, selectVocab, type VocabWord } from '../store/useLibrary'
+import {
+  useLibrary,
+  selectVocab,
+  selectReviewCounts,
+  type VocabWord,
+} from '../store/useLibrary'
 import { EmptyState } from '../components/States'
+import { ReviewSession } from '../components/ReviewSession'
 import { speak, canSpeak } from '../lib/speak'
 
 export function VocabularyPage() {
   const words = useLibrary(useShallow(selectVocab))
-  const [mode, setMode] = useState<'list' | 'cards'>('list')
+  const counts = useLibrary(useShallow((s) => selectReviewCounts(s)))
+  const [mode, setMode] = useState<'list' | 'review'>('list')
 
   return (
     <div className="space-y-8">
@@ -37,8 +34,13 @@ export function VocabularyPage() {
             <ModeButton active={mode === 'list'} onClick={() => setMode('list')} icon={List}>
               Lista
             </ModeButton>
-            <ModeButton active={mode === 'cards'} onClick={() => setMode('cards')} icon={Layers}>
-              Praticar
+            <ModeButton active={mode === 'review'} onClick={() => setMode('review')} icon={Brain}>
+              Revisar
+              {counts.total > 0 && (
+                <span className="ml-1 rounded-full bg-rose-400/90 px-1.5 text-[0.7rem] font-bold text-night-900">
+                  {counts.total}
+                </span>
+              )}
             </ModeButton>
           </div>
         )}
@@ -48,14 +50,55 @@ export function VocabularyPage() {
         <EmptyState
           icon={<BookHeart size={32} />}
           title="Seu caderninho está vazio"
-          description="Enquanto canta, toque em qualquer palavra da letra para ver a tradução e guardá-la aqui."
+          description="Enquanto canta, toque em qualquer palavra da letra para ver a tradução, uma frase de exemplo e guardá-la aqui."
         />
       ) : mode === 'list' ? (
-        <WordList words={words} />
+        <>
+          {counts.total > 0 && (
+            <ReviewBanner
+              due={counts.due}
+              fresh={counts.fresh}
+              onStart={() => setMode('review')}
+            />
+          )}
+          <WordList words={words} />
+        </>
       ) : (
-        <Flashcards words={words} />
+        <ReviewSession onExit={() => setMode('list')} />
       )}
     </div>
+  )
+}
+
+function ReviewBanner({
+  due,
+  fresh,
+  onStart,
+}: {
+  due: number
+  fresh: number
+  onStart: () => void
+}) {
+  const parts = [
+    due > 0 ? `${due} para revisar` : '',
+    fresh > 0 ? `${fresh} ${fresh === 1 ? 'nova' : 'novas'}` : '',
+  ].filter(Boolean)
+  return (
+    <motion.button
+      onClick={onStart}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-strong flex w-full items-center gap-4 rounded-2xl p-4 text-left transition-transform hover:scale-[1.01]"
+    >
+      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-aurora-1/30 to-rose-400/30 text-cream">
+        <Brain size={24} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-display text-lg">Hora de revisar 🧠</div>
+        <div className="truncate text-sm text-mist/65">{parts.join(' · ')}</div>
+      </div>
+      <span className="btn-primary shrink-0 px-4 py-2 text-sm">Começar</span>
+    </motion.button>
   )
 }
 
@@ -119,8 +162,13 @@ function WordList({ words }: { words: VocabWord[] }) {
                 )}
               </div>
               <div className="text-rose-300">{w.translation}</div>
+              {w.example?.text && (
+                <div className="mt-1.5 border-l-2 border-white/10 pl-2 text-xs leading-snug text-mist/55">
+                  “{w.example.text}”
+                </div>
+              )}
               {w.songName && (
-                <div className="mt-1 truncate text-xs text-mist/45">de “{w.songName}”</div>
+                <div className="mt-1 truncate text-xs text-mist/40">de “{w.songName}”</div>
               )}
             </div>
             <button
@@ -134,110 +182,5 @@ function WordList({ words }: { words: VocabWord[] }) {
         ))}
       </AnimatePresence>
     </motion.div>
-  )
-}
-
-function Flashcards({ words }: { words: VocabWord[] }) {
-  const [order, setOrder] = useState(() => words.map((_, i) => i))
-  const [pos, setPos] = useState(0)
-  const [flipped, setFlipped] = useState(false)
-
-  // Guard against the deck shrinking (word removed elsewhere).
-  const safeOrder = order.filter((i) => i < words.length)
-  const index = safeOrder[Math.min(pos, safeOrder.length - 1)] ?? 0
-  const card = words[index]
-
-  const shuffle = () => {
-    const next = [...words.map((_, i) => i)]
-    for (let i = next.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[next[i], next[j]] = [next[j], next[i]]
-    }
-    setOrder(next)
-    setPos(0)
-    setFlipped(false)
-  }
-
-  const move = (delta: number) => {
-    setFlipped(false)
-    setPos((p) => (p + delta + safeOrder.length) % safeOrder.length)
-  }
-
-  if (!card) return null
-
-  return (
-    <div className="mx-auto flex max-w-xl flex-col items-center gap-6">
-      <div className="text-sm text-mist/50">
-        {pos + 1} / {safeOrder.length}
-      </div>
-
-      {/* Flip card */}
-      <div
-        className="relative h-72 w-full cursor-pointer"
-        style={{ perspective: '1400px' }}
-        onClick={() => setFlipped((f) => !f)}
-      >
-        <motion.div
-          className="relative h-full w-full"
-          style={{ transformStyle: 'preserve-3d' }}
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {/* Front: English */}
-          <div
-            className="glass-strong absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-3xl p-8 text-center"
-            style={{ backfaceVisibility: 'hidden' }}
-          >
-            <span className="text-xs uppercase tracking-[0.25em] text-mist/50">Inglês</span>
-            <span className="font-display text-5xl text-glow">{card.word}</span>
-            {canSpeak && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  speak(card.word)
-                }}
-                title="Ouvir pronúncia"
-                className="flex items-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm text-aurora-3 transition-colors hover:bg-white/15"
-              >
-                <Volume2 size={16} /> Ouvir
-              </button>
-            )}
-            <span className="mt-1 text-sm text-mist/50">toque no cartão para ver a tradução</span>
-          </div>
-          {/* Back: Portuguese */}
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-3xl p-8 text-center"
-            style={{
-              backfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-              background: 'linear-gradient(135deg, rgba(255,143,177,0.25), rgba(180,120,255,0.25))',
-              border: '1px solid rgba(255,255,255,0.14)',
-            }}
-          >
-            <span className="text-xs uppercase tracking-[0.25em] text-mist/60">Português</span>
-            <span className="font-display text-4xl text-cream">{card.translation}</span>
-            {card.songName && (
-              <span className="mt-2 text-sm text-mist/50">de “{card.songName}”</span>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => move(-1)} className="btn-ghost p-3" title="Anterior">
-          <ChevronLeft size={20} />
-        </button>
-        <button onClick={() => setFlipped((f) => !f)} className="btn-ghost px-5" title="Virar">
-          <RotateCcw size={18} /> Virar
-        </button>
-        <button onClick={() => move(1)} className="btn-ghost p-3" title="Próxima">
-          <ChevronRight size={20} />
-        </button>
-        <button onClick={shuffle} className="btn-ghost p-3" title="Embaralhar">
-          <Shuffle size={18} />
-        </button>
-      </div>
-    </div>
   )
 }

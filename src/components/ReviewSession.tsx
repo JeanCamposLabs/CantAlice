@@ -1,0 +1,353 @@
+import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Volume2, PartyPopper, Eye, Loader2 } from 'lucide-react'
+import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '../store/useLibrary'
+import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
+import { fetchExample } from '../lyrics/examples'
+import { speak, canSpeak } from '../lib/speak'
+
+/** Highlight occurrences of `word` (stem match) inside an example phrase. */
+function emphasize(text: string, word: string) {
+  const re = new RegExp(`(\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i')
+  const parts = text.split(re)
+  if (parts.length === 1) return text
+  return parts.map((p, i) =>
+    re.test(p) ? (
+      <strong key={i} className="text-glow">
+        {p}
+      </strong>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
+  )
+}
+
+/** Blank out the target word in an example so it can be produced from context. */
+function cloze(text: string, word: string) {
+  const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*`, 'i')
+  return text.replace(re, '_____')
+}
+
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z'-]/gi, '')
+
+const RATINGS: { rating: Rating; label: string; cls: string }[] = [
+  { rating: 1, label: 'Errei', cls: 'bg-rose-500/25 text-rose-200 hover:bg-rose-500/35' },
+  { rating: 2, label: 'Difícil', cls: 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30' },
+  { rating: 3, label: 'Bom', cls: 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30' },
+  { rating: 4, label: 'Fácil', cls: 'bg-sky-500/20 text-sky-200 hover:bg-sky-500/30' },
+]
+
+export function ReviewSession({ onExit }: { onExit: () => void }) {
+  const reviewCard = useLibrary((s) => s.reviewCard)
+  const setWordExample = useLibrary((s) => s.setWordExample)
+
+  // Snapshot the queue at session start; "Errei" cards are re-queued in-session.
+  const [queue, setQueue] = useState<ReviewItem[]>(() => selectReviewQueue(useLibrary.getState()))
+  const [pos, setPos] = useState(0)
+  const [revealed, setRevealed] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [reviewed, setReviewed] = useState(0)
+  const [fetchingPhrase, setFetchingPhrase] = useState(false)
+
+  const item = queue[pos]
+  const curKey = item?.key
+  // Read the live word so freshly-graded SRS state and lazily-fetched example
+  // phrases are reflected immediately.
+  const liveWord = useLibrary((s) => (curKey ? s.vocab[curKey] : undefined))
+
+  // Every card must show a real English phrase. If an older saved word has none,
+  // fetch one on the fly (e.g. words saved before example phrases existed).
+  useEffect(() => {
+    if (!liveWord || liveWord.example?.text) {
+      setFetchingPhrase(false)
+      return
+    }
+    let alive = true
+    setFetchingPhrase(true)
+    fetchExample(liveWord.word).then((ex) => {
+      if (!alive) return
+      if (ex) setWordExample(liveWord.word, ex)
+      setFetchingPhrase(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [liveWord, setWordExample])
+
+  const liveState = item && liveWord ? liveWord.srs?.[item.dir] : undefined
+  const intervals = useMemo(
+    () => (item ? previewIntervals(liveState ?? item.state) : null),
+    [item, liveState],
+  )
+
+  if (!item) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="mx-auto flex max-w-md flex-col items-center gap-5 py-10 text-center"
+      >
+        <span className="grid h-20 w-20 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+          <PartyPopper size={36} />
+        </span>
+        <h2 className="font-display text-3xl">
+          {reviewed > 0 ? 'Revisão concluída! 🎉' : 'Nada para revisar agora'}
+        </h2>
+        <p className="text-mist/70">
+          {reviewed > 0
+            ? `Você revisou ${reviewed} ${reviewed === 1 ? 'cartão' : 'cartões'} hoje. Volte amanhã para fixar de vez. 💛`
+            : 'Guarde palavras nas músicas e elas aparecem aqui para revisar no momento certo.'}
+        </p>
+        <button onClick={onExit} className="btn-primary">
+          Voltar ao vocabulário
+        </button>
+      </motion.div>
+    )
+  }
+
+  const word = liveWord ?? item.word
+  const { dir } = item
+
+  const grade = (rating: Rating) => {
+    reviewCard(item.key, dir, rating)
+    setRevealed(false)
+    setTyped('')
+    if (rating === 1) {
+      // Re-queue the missed card a few positions later in this session.
+      setQueue((q) => {
+        const next = [...q]
+        const [cur] = next.splice(pos, 1)
+        next.splice(Math.min(next.length, pos + 5), 0, cur)
+        return next
+      })
+      // pos now points at the following card already.
+    } else {
+      setReviewed((n) => n + 1)
+      setPos((p) => p + 1)
+    }
+  }
+
+  const reveal = () => setRevealed(true)
+  const typedCorrect = revealed && dir === 'rev' && norm(typed) === norm(word.word)
+
+  const remaining = queue.length - pos
+  const progress = queue.length ? (pos / queue.length) * 100 : 0
+
+  return (
+    <div className="mx-auto flex max-w-xl flex-col gap-5">
+      {/* Progress */}
+      <div className="flex items-center justify-between text-sm text-mist/55">
+        <span>{remaining} restantes</span>
+        <button onClick={onExit} className="hover:text-cream">
+          Sair
+        </button>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: 'linear-gradient(90deg,#b478ff,#ff8fb1)' }}
+          animate={{ width: `${progress}%` }}
+          transition={{ type: 'spring', stiffness: 200, damping: 30 }}
+        />
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${item.key}:${dir}:${pos}`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -16 }}
+          transition={{ duration: 0.22 }}
+          className="glass-strong flex min-h-[20rem] flex-col items-center justify-center gap-4 rounded-3xl p-7 text-center"
+        >
+          <span className="rounded-full bg-white/8 px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-mist/55">
+            {dir === 'fwd' ? 'Entenda a frase · EN → PT' : 'Complete a frase · PT → EN'}
+          </span>
+
+          {dir === 'fwd' ? (
+            <FwdCard word={word} revealed={revealed} fetching={fetchingPhrase} />
+          ) : (
+            <RevCard
+              word={word}
+              revealed={revealed}
+              fetching={fetchingPhrase}
+              typed={typed}
+              setTyped={setTyped}
+              typedCorrect={typedCorrect}
+              onEnter={reveal}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Actions */}
+      {!revealed ? (
+        <button onClick={reveal} className="btn-primary justify-center py-3 text-base">
+          <Eye size={18} /> Mostrar resposta
+        </button>
+      ) : (
+        <div className="grid grid-cols-4 gap-2">
+          {RATINGS.map(({ rating, label, cls }) => (
+            <button
+              key={rating}
+              onClick={() => grade(rating)}
+              className={`flex flex-col items-center gap-0.5 rounded-2xl px-2 py-3 text-sm font-semibold transition-colors ${cls}`}
+            >
+              {label}
+              <span className="text-[0.65rem] font-normal opacity-80">
+                {intervals ? formatInterval(intervals[rating]) : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A small loader shown while a word's example phrase is being fetched. */
+function PhraseLoading() {
+  return (
+    <span className="flex items-center gap-2 text-sm text-mist/50">
+      <Loader2 size={16} className="animate-spin" /> buscando uma frase…
+    </span>
+  )
+}
+
+const SpeakButton = ({ text, size = 18 }: { text: string; size?: number }) =>
+  canSpeak ? (
+    <button
+      onClick={() => speak(text)}
+      title="Ouvir"
+      className="grid h-9 w-9 place-items-center rounded-full bg-white/8 text-aurora-3 hover:bg-white/15"
+    >
+      <Volume2 size={size} />
+    </button>
+  ) : null
+
+// — Recognition: read the English phrase, recall what it means (EN→PT) —
+function FwdCard({
+  word,
+  revealed,
+  fetching,
+}: {
+  word: VocabWord
+  revealed: boolean
+  fetching: boolean
+}) {
+  const phrase = word.example?.text
+  return (
+    <>
+      {phrase ? (
+        <div className="flex items-center gap-2">
+          <p className="max-w-md font-display text-2xl leading-snug text-cream sm:text-3xl">
+            {emphasize(phrase, word.word)}
+          </p>
+          <SpeakButton text={phrase} />
+        </div>
+      ) : fetching ? (
+        <PhraseLoading />
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="font-display text-4xl text-glow">{word.word}</span>
+          <SpeakButton text={word.word} />
+        </div>
+      )}
+
+      {!revealed ? (
+        <span className="text-sm text-mist/45">
+          O que significa{phrase ? ' a palavra em destaque' : ''}?
+        </span>
+      ) : (
+        <div className="mt-1 flex flex-col items-center gap-1.5 border-t border-white/10 pt-3">
+          {word.example?.translation && (
+            <span className="max-w-md text-lg italic leading-snug text-rose-300/90">
+              {word.example.translation}
+            </span>
+          )}
+          <span className="text-base text-rose-300">
+            <strong className="text-cream">{word.word}</strong> = {word.translation}
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
+// — Production: read the Portuguese phrase, complete the English one (PT→EN) —
+function RevCard({
+  word,
+  revealed,
+  fetching,
+  typed,
+  setTyped,
+  typedCorrect,
+  onEnter,
+}: {
+  word: VocabWord
+  revealed: boolean
+  fetching: boolean
+  typed: string
+  setTyped: (v: string) => void
+  typedCorrect: boolean
+  onEnter: () => void
+}) {
+  const en = word.example?.text
+  const pt = word.example?.translation
+  return (
+    <>
+      {/* Portuguese prompt — the whole phrase when we have it. */}
+      {pt ? (
+        <p className="max-w-md font-display text-2xl leading-snug text-cream sm:text-3xl">{pt}</p>
+      ) : (
+        <span className="font-display text-4xl text-cream">{word.translation}</span>
+      )}
+
+      {!revealed ? (
+        <>
+          {en ? (
+            <p className="max-w-md text-lg leading-snug text-mist/60">{cloze(en, word.word)}</p>
+          ) : fetching ? (
+            <PhraseLoading />
+          ) : null}
+          <input
+            autoFocus
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onEnter()}
+            placeholder="palavra que falta…"
+            className="mt-1 w-60 rounded-2xl border border-white/12 bg-white/5 px-4 py-2.5 text-center text-lg outline-none placeholder:text-mist/35 focus:border-aurora-3/50"
+          />
+          <span className="text-sm text-mist/45">
+            {en ? 'Complete a frase em inglês' : 'Como se diz em inglês?'}
+          </span>
+        </>
+      ) : (
+        <div className="mt-1 flex flex-col items-center gap-2 border-t border-white/10 pt-3">
+          {en ? (
+            <div className="flex items-center gap-2">
+              <p className="max-w-md font-display text-2xl leading-snug text-cream">
+                {emphasize(en, word.word)}
+              </p>
+              <SpeakButton text={en} size={16} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-display text-4xl text-glow">{word.word}</span>
+              <SpeakButton text={word.word} size={16} />
+            </div>
+          )}
+          {typed.trim() && (
+            <span className={`text-sm ${typedCorrect ? 'text-emerald-300' : 'text-rose-300/80'}`}>
+              {typedCorrect ? 'Você acertou! 🎉' : `Você escreveu: ${typed}`}
+            </span>
+          )}
+        </div>
+      )}
+    </>
+  )
+}

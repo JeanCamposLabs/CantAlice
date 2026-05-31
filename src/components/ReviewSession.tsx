@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Volume2, PartyPopper, Eye, Loader2 } from 'lucide-react'
 import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '../store/useLibrary'
 import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
@@ -155,34 +155,31 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
         />
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`${item.key}:${dir}:${pos}`}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -16 }}
-          transition={{ duration: 0.22 }}
-          className="glass-strong flex min-h-[20rem] flex-col items-center justify-center gap-4 rounded-3xl p-7 text-center"
-        >
-          <span className="rounded-full bg-white/8 px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-mist/55">
-            {dir === 'fwd' ? 'Entenda a frase · EN → PT' : 'Complete a frase · PT → EN'}
-          </span>
+      <motion.div
+        key={`${item.key}:${dir}:${pos}`}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22 }}
+        className="glass-strong flex min-h-[20rem] flex-col items-center justify-center gap-4 rounded-3xl p-7 text-center"
+      >
+        <span className="rounded-full bg-white/8 px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-mist/55">
+          {dir === 'fwd' ? 'Entenda a frase · EN → PT' : 'Complete a frase · PT → EN'}
+        </span>
 
-          {dir === 'fwd' ? (
-            <FwdCard word={word} revealed={revealed} fetching={fetchingPhrase} />
-          ) : (
-            <RevCard
-              word={word}
-              revealed={revealed}
-              fetching={fetchingPhrase}
-              typed={typed}
-              setTyped={setTyped}
-              typedCorrect={typedCorrect}
-              onEnter={reveal}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
+        {dir === 'fwd' ? (
+          <FwdCard word={word} revealed={revealed} fetching={fetchingPhrase} />
+        ) : (
+          <RevCard
+            word={word}
+            revealed={revealed}
+            fetching={fetchingPhrase}
+            typed={typed}
+            setTyped={setTyped}
+            typedCorrect={typedCorrect}
+            onEnter={reveal}
+          />
+        )}
+      </motion.div>
 
       {/* Actions */}
       {!revealed ? (

@@ -9,6 +9,7 @@ import { Celebration } from './components/Celebration'
 import { InstallPrompt } from './components/InstallPrompt'
 import { VersionBadge } from './components/VersionBadge'
 import { RequestAccess } from './components/RequestAccess'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useUI } from './store/useUI'
 import { HomePage } from './pages/Home'
 import { SearchPage } from './pages/Search'
@@ -124,7 +125,9 @@ export function App() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
-                <Page view={view} />
+                <ErrorBoundary resetKey={view}>
+                  <Page view={view} />
+                </ErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </main>

@@ -1,15 +1,16 @@
 /**
  * Real-world example sentences — the "Reverso Context" idea: show a saved word
- * inside a natural phrase, not on its own. We pull example sentences from the
- * free, CORS-friendly Dictionary API (dictionaryapi.dev), pick the cleanest one
- * containing the word, and translate it to Portuguese.
+ * inside a natural phrase, not on its own, and *not* the song's own lyric line.
  *
- * If the dictionary has no usable example we fall back to the lyric line the
- * word was tapped in (still real usage), and otherwise return null so the card
- * simply shows the word + translation.
+ * We gather candidate sentences from two free, CORS-friendly sources — the
+ * Wiktionary REST API (broad coverage of usage examples) and the Dictionary API
+ * (dictionaryapi.dev) — pick the cleanest real sentence that uses the word, and
+ * translate it to Portuguese. If neither has anything usable we return null and
+ * the card simply shows the word + translation.
  */
 import { translate } from './translate'
 
+const WIKTIONARY = 'https://en.wiktionary.org/api/rest_v1/page/definition'
 const DICT_BASE = 'https://api.dictionaryapi.dev/api/v2/entries/en'
 
 export interface Example {
@@ -17,14 +18,21 @@ export interface Example {
   text: string
   /** Its Portuguese translation. */
   translation: string
-  /** Where it came from — for a subtle credit line. */
-  source: 'dictionary' | 'song'
+  source: 'wiktionary' | 'dictionary'
 }
 
 const cache = new Map<string, Example | null>()
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Strip HTML (Wiktionary examples arrive as markup) down to plain text. */
+function stripHtml(s: string): string {
+  if (typeof DOMParser !== 'undefined') {
+    return new DOMParser().parseFromString(s, 'text/html').body.textContent ?? ''
+  }
+  return s.replace(/<[^>]+>/g, '')
 }
 
 /** Split a possibly multi-sentence example into individual sentences. */
@@ -35,60 +43,81 @@ function sentences(text: string): string[] {
     .filter(Boolean)
 }
 
-/** Choose the shortest clean sentence that actually contains the word. */
-function pickExample(entries: unknown, word: string): string | null {
-  if (!Array.isArray(entries)) return null
-  const raw: string[] = []
-  for (const entry of entries) {
-    const meanings = (entry as { meanings?: unknown[] })?.meanings ?? []
-    for (const m of meanings as { definitions?: { example?: string }[] }[]) {
-      for (const d of m.definitions ?? []) {
-        if (d.example) raw.push(d.example)
+async function wiktionaryExamples(word: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${WIKTIONARY}/${encodeURIComponent(word)}`)
+    if (!res.ok) return []
+    const data = (await res.json()) as Record<
+      string,
+      { definitions?: { examples?: string[]; parsedExamples?: { example?: string }[] }[] }[]
+    >
+    const out: string[] = []
+    for (const def of data.en ?? []) {
+      for (const d of def.definitions ?? []) {
+        for (const pe of d.parsedExamples ?? []) if (pe.example) out.push(stripHtml(pe.example))
+        for (const e of d.examples ?? []) out.push(stripHtml(e))
       }
     }
+    return out
+  } catch {
+    return []
   }
-  const all = raw.flatMap(sentences)
-  // Match the word as a stem so inflected forms (love → loving) still count.
+}
+
+async function dictionaryExamples(word: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${DICT_BASE}/${encodeURIComponent(word)}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    const out: string[] = []
+    for (const entry of data) {
+      for (const m of (entry?.meanings ?? []) as { definitions?: { example?: string }[] }[]) {
+        for (const d of m.definitions ?? []) if (d.example) out.push(d.example)
+      }
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/** Choose the best real sentence that actually uses the word. */
+function pickExample(raw: string[], word: string): string | null {
   const re = new RegExp(`\\b${escapeRe(word.toLowerCase())}`, 'i')
-  const sized = (s: string) => s.length >= 8 && s.length <= 120
-  const containing = all.filter((s) => re.test(s) && sized(s))
-  const pool = containing.length ? containing : all.filter(sized)
+  const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length
+  const all = raw.flatMap(sentences)
+  const usable = all.filter(
+    (s) => re.test(s) && s.length >= 15 && s.length <= 140 && wordCount(s) >= 3,
+  )
+  const pool = usable.length ? usable : all.filter((s) => re.test(s) && wordCount(s) >= 2)
   if (!pool.length) return null
-  pool.sort((a, b) => a.length - b.length)
+  // Prefer a complete sentence (ends with punctuation), then the shortest.
+  pool.sort((a, b) => {
+    const pa = /[.!?]$/.test(a) ? 0 : 1
+    const pb = /[.!?]$/.test(b) ? 0 : 1
+    return pa - pb || a.length - b.length
+  })
   return pool[0]
 }
 
-/**
- * Fetch an example phrase for `word` (+ its translation). `fallbackLine` is the
- * lyric line it was tapped in, used only if the dictionary has nothing.
- */
-export async function fetchExample(
-  word: string,
-  fallbackLine?: string | null,
-): Promise<Example | null> {
+/** Fetch an example phrase for `word` (+ its Portuguese translation). */
+export async function fetchExample(word: string): Promise<Example | null> {
   const key = word.trim().toLowerCase()
   if (!key) return null
   if (cache.has(key)) return cache.get(key)!
 
-  let text: string | null = null
-  let source: Example['source'] = 'dictionary'
-  try {
-    const res = await fetch(`${DICT_BASE}/${encodeURIComponent(key)}`)
-    if (res.ok) text = pickExample(await res.json(), key)
-  } catch {
-    /* offline / not found — fall through to the fallback */
-  }
-
-  if (!text && fallbackLine && fallbackLine.trim().length >= 8) {
-    text = fallbackLine.replace(/\s+/g, ' ').trim()
-    source = 'song'
-  }
+  const [wikt, dict] = await Promise.all([wiktionaryExamples(key), dictionaryExamples(key)])
+  // Wiktionary first — its examples tend to be the most natural; dictionary as
+  // a complement so we still find something when Wiktionary is sparse.
+  const text = pickExample(wikt, key) ?? pickExample(dict, key)
 
   if (!text) {
     cache.set(key, null)
     return null
   }
 
+  const source: Example['source'] = pickExample(wikt, key) ? 'wiktionary' : 'dictionary'
   const translation = await translate(text)
   const example: Example = { text, translation, source }
   cache.set(key, example)

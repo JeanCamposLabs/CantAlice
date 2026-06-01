@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { LyricsResult, LyricLine } from '../lyrics/lrclib'
 import { activeLineIndex } from '../lyrics/lrclib'
@@ -35,6 +35,12 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
   const containerRef = useRef<HTMLDivElement>(null)
   const lineRefs = useRef<(HTMLDivElement | null)[]>([])
 
+  // Stable per-row ref registrar — keeps LyricLineRow's props referentially
+  // stable so React.memo can skip the lines whose state didn't change.
+  const registerRef = useCallback((i: number, el: HTMLDivElement | null) => {
+    lineRefs.current[i] = el
+  }, [])
+
   // — Track the active line via the live position (Spotify only) —
   useEffect(() => {
     if (!isSynced) {
@@ -65,13 +71,15 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
   const ensureTranslated = useCallback(
     (i: number) => {
       if (!showTranslations || i < 0 || i >= lines.length) return
-      if (translations[i] !== undefined || pendingRef.current.has(i)) return
+      // pendingRef is permanent (we never delete), so it alone dedupes both
+      // in-flight and completed lines — no need to depend on `translations`.
+      if (pendingRef.current.has(i)) return
       const text = lines[i].text.trim()
       if (!text) return
       pendingRef.current.add(i)
       translate(text).then((t) => setTranslations((prev) => ({ ...prev, [i]: t })))
     },
-    [showTranslations, lines, translations],
+    [showTranslations, lines],
   )
 
   useEffect(() => {
@@ -98,13 +106,12 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
     }
   }, [isSynced, showTranslations, lines])
 
-  const onWordClick = (
-    word: string,
-    line: string,
-    e: React.MouseEvent<HTMLButtonElement>,
-  ) => {
-    setSelection({ word, rect: e.currentTarget.getBoundingClientRect(), songName, line })
-  }
+  const onWordClick = useCallback(
+    (word: string, line: string, e: React.MouseEvent<HTMLButtonElement>) => {
+      setSelection({ word, rect: e.currentTarget.getBoundingClientRect(), songName, line })
+    },
+    [songName],
+  )
 
   if (lines.length === 0) return null
 
@@ -118,9 +125,7 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
         {lines.map((line, i) => (
           <LyricLineRow
             key={i}
-            ref={(el) => {
-              lineRefs.current[i] = el
-            }}
+            registerRef={registerRef}
             line={line}
             index={i}
             isSynced={isSynced}
@@ -128,7 +133,7 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
             state={i === activeIdx ? 'active' : i < activeIdx ? 'past' : 'future'}
             translation={showTranslations ? translations[i] : undefined}
             onWordClick={onWordClick}
-            onSeek={isSynced && onSeekToLine ? () => onSeekToLine(line.timeMs) : undefined}
+            onSeek={onSeekToLine}
           />
         ))}
       </div>
@@ -143,9 +148,10 @@ export function LyricsView({ lyrics, songName, isSynced, getPosition, onSeekToLi
 // — A single lyric line, with tappable words and optional translation —
 type LineState = 'active' | 'past' | 'future'
 
-const LyricLineRow = ({
-  ref,
+const LyricLineRow = memo(function LyricLineRow({
+  registerRef,
   line,
+  index,
   isSynced,
   large,
   state,
@@ -153,7 +159,7 @@ const LyricLineRow = ({
   onWordClick,
   onSeek,
 }: {
-  ref: (el: HTMLDivElement | null) => void
+  registerRef: (index: number, el: HTMLDivElement | null) => void
   line: LyricLine
   index: number
   isSynced: boolean
@@ -161,10 +167,13 @@ const LyricLineRow = ({
   state: LineState
   translation?: string
   onWordClick: (word: string, line: string, e: React.MouseEvent<HTMLButtonElement>) => void
-  onSeek?: () => void
-}) => {
+  onSeek?: (ms: number) => void
+}) {
   // Tokenise into words + whitespace so we can make words individually tappable.
   const tokens = useMemo(() => line.text.match(/(\s+|[^\s]+)/g) ?? [], [line.text])
+
+  const ref = useCallback((el: HTMLDivElement | null) => registerRef(index, el), [registerRef, index])
+  const seek = isSynced && onSeek ? () => onSeek(line.timeMs) : undefined
 
   const isBlank = line.text.trim() === ''
 
@@ -196,9 +205,9 @@ const LyricLineRow = ({
       }`}
     >
       {/* Seek affordance */}
-      {onSeek && (
+      {seek && (
         <button
-          onClick={onSeek}
+          onClick={seek}
           title="Pular para este trecho"
           className="absolute -left-1 top-1/2 hidden h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-mist/40 hover:text-rose-300 group-hover:grid"
         >
@@ -242,4 +251,4 @@ const LyricLineRow = ({
       )}
     </motion.div>
   )
-}
+})

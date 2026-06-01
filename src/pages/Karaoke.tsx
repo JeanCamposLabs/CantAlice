@@ -255,7 +255,7 @@ function KaraokeStage({
               songName={track.name}
               isSynced={isSynced}
               getPosition={playback.getPosition}
-              onSeekToLine={(ms) => playback.seek(ms)}
+              onSeekToLine={playback.seek}
             />
           )}
         </div>

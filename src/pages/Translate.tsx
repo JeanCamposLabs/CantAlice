@@ -6,23 +6,7 @@ import { translate } from '../lyrics/translate'
 import { fetchExamples, type Example } from '../lyrics/examples'
 import { useLibrary, selectWord } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
-
-/** Highlight occurrences of `term` (stem match) inside an example phrase. */
-function emphasize(text: string, term: string) {
-  const head = term.split(/\s+/)[0] ?? term
-  const re = new RegExp(`(\\b${head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i')
-  const parts = text.split(re)
-  if (parts.length === 1) return text
-  return parts.map((p, i) =>
-    re.test(p) ? (
-      <strong key={i} className="text-glow">
-        {p}
-      </strong>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
-  )
-}
+import { SpeakableText } from '../components/SpeakableText'
 
 export function TranslatePage() {
   const [query, setQuery] = useState('')
@@ -168,7 +152,9 @@ function ExampleRow({
   return (
     <div className="glass group flex items-start gap-3 rounded-2xl p-4">
       <div className="min-w-0 flex-1">
-        <p className="leading-snug text-cream">{emphasize(example.text, term)}</p>
+        <p className="leading-snug text-cream">
+          <SpeakableText text={example.text} highlight={term} />
+        </p>
         <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">{example.translation}</p>
       </div>
       <div className="flex shrink-0 flex-col items-center gap-1">

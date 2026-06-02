@@ -5,22 +5,7 @@ import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '
 import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
 import { fetchExample } from '../lyrics/examples'
 import { speak, canSpeak } from '../lib/speak'
-
-/** Highlight occurrences of `word` (stem match) inside an example phrase. */
-function emphasize(text: string, word: string) {
-  const re = new RegExp(`(\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i')
-  const parts = text.split(re)
-  if (parts.length === 1) return text
-  return parts.map((p, i) =>
-    re.test(p) ? (
-      <strong key={i} className="text-glow">
-        {p}
-      </strong>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
-  )
-}
+import { SpeakableText } from './SpeakableText'
 
 /** Blank out the target word in an example so it can be produced from context. */
 function cloze(text: string, word: string) {
@@ -242,7 +227,7 @@ function FwdCard({
       {phrase ? (
         <div className="flex items-center gap-2">
           <p className="max-w-md font-display text-2xl leading-snug text-cream sm:text-3xl">
-            {emphasize(phrase, word.word)}
+            <SpeakableText text={phrase} highlight={word.word} />
           </p>
           <SpeakButton text={phrase} />
         </div>
@@ -328,7 +313,7 @@ function RevCard({
           {en ? (
             <div className="flex items-center gap-2">
               <p className="max-w-md font-display text-2xl leading-snug text-cream">
-                {emphasize(en, word.word)}
+                <SpeakableText text={en} highlight={word.word} />
               </p>
               <SpeakButton text={en} size={16} />
             </div>

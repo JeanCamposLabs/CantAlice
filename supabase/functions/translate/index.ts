@@ -54,39 +54,99 @@ async function deepl(texts: string[]): Promise<string[] | null> {
 
 /** Real bilingual example sentences (EN + PT) from Tatoeba. */
 async function tatoeba(query: string, limit: number): Promise<{ text: string; translation: string }[]> {
-  const url =
+  // Pull a wider candidate pool (two pages) so we can pick for *variety* rather
+  // than just taking the top hits — relevance order clusters near-identical
+  // minimal pairs ("It rains." / "It rained." / "It stopped raining.").
+  const pageUrl = (page: number) =>
     `https://tatoeba.org/en/api_v0/search?from=eng&to=por&sort=relevance` +
-    `&trans_filter=limit&trans_to=por&query=${encodeURIComponent(query)}`
+    `&trans_filter=limit&trans_to=por&query=${encodeURIComponent(query)}&page=${page}`
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'CantAlice/1.0 (learning app)' } })
-    if (!res.ok) return []
-    const data = (await res.json()) as {
-      results?: { text?: string; translations?: { lang?: string; text?: string }[][] }[]
-    }
-    const out: { text: string; translation: string }[] = []
+    const pages = await Promise.all(
+      [1, 2].map((p) =>
+        fetch(pageUrl(p), { headers: { 'User-Agent': 'CantAlice/1.0 (learning app)' } })
+          .then((r) => (r.ok ? r.json() : { results: [] }))
+          .catch(() => ({ results: [] })),
+      ),
+    )
+    const cands: { text: string; translation: string }[] = []
     const seen = new Set<string>()
-    for (const r of data.results ?? []) {
-      let pt = ''
-      for (const group of r.translations ?? []) {
-        for (const tr of group) {
-          if (tr?.lang === 'por' && tr.text) {
-            pt = tr.text
-            break
+    for (const data of pages as { results?: { text?: string; translations?: { lang?: string; text?: string }[][] }[] }[]) {
+      for (const r of data.results ?? []) {
+        let pt = ''
+        for (const group of r.translations ?? []) {
+          for (const tr of group) {
+            if (tr?.lang === 'por' && tr.text) {
+              pt = tr.text
+              break
+            }
           }
+          if (pt) break
         }
-        if (pt) break
+        const key = r.text?.trim().toLowerCase()
+        if (r.text && pt && key && !seen.has(key)) {
+          seen.add(key)
+          cands.push({ text: r.text, translation: pt })
+        }
       }
-      const key = r.text?.trim().toLowerCase()
-      if (r.text && pt && key && !seen.has(key)) {
-        seen.add(key)
-        out.push({ text: r.text, translation: pt })
-      }
-      if (out.length >= limit) break
     }
-    return out
+    return selectVaried(cands, query, limit)
   } catch {
     return []
   }
+}
+
+const STOPWORDS = new Set([
+  'a', 'an', 'the', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+  'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did', 'will', 'would',
+  'to', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'but', 'so', 'my', 'your', 'his', 'their',
+  'this', 'that', 'these', 'those', 'not', 'no', 'as', 'with', 'from', 'by',
+])
+
+/** The set of "content" words in a sentence, minus stopwords and the query stem. */
+function contentSig(text: string, head: string): Set<string> {
+  const words = (text.toLowerCase().match(/[a-z']+/g) ?? []).filter(
+    (w) => !STOPWORDS.has(w) && !(head.length >= 3 && w.startsWith(head)),
+  )
+  return new Set(words)
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1 // both reduce to just the query word
+  let inter = 0
+  for (const w of a) if (b.has(w)) inter++
+  const union = a.size + b.size - inter
+  return union === 0 ? 0 : inter / union
+}
+
+/**
+ * Greedily pick up to `limit` sentences that are varied: prefer a natural length
+ * (~4–12 words) and reject candidates that overlap too much with ones already
+ * chosen. Backfills in original order if variety leaves us short.
+ */
+function selectVaried(
+  cands: { text: string; translation: string }[],
+  query: string,
+  limit: number,
+): { text: string; translation: string }[] {
+  const head = query.toLowerCase().split(/\s+/)[0]?.slice(0, 5) ?? ''
+  const enriched = cands.map((c) => {
+    const n = (c.text.match(/[A-Za-z']+/g) ?? []).length
+    return { ...c, sig: contentSig(c.text, head), lenPenalty: Math.abs(n - 8) + (n < 4 ? 6 : 0) }
+  })
+  // Stable-sort by how close to an ideal length; relevance order breaks ties.
+  const ordered = enriched.map((c, i) => ({ c, i })).sort((x, y) => x.c.lenPenalty - y.c.lenPenalty || x.i - y.i).map((o) => o.c)
+
+  const picked: typeof ordered = []
+  for (const c of ordered) {
+    if (picked.length >= limit) break
+    if (picked.some((p) => jaccard(p.sig, c.sig) > 0.5)) continue
+    picked.push(c)
+  }
+  for (const c of ordered) {
+    if (picked.length >= limit) break
+    if (!picked.includes(c)) picked.push(c)
+  }
+  return picked.map(({ text, translation }) => ({ text, translation }))
 }
 
 Deno.serve(async (req: Request) => {

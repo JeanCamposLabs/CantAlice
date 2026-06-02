@@ -64,6 +64,7 @@ async function tatoeba(query: string, limit: number): Promise<{ text: string; tr
       results?: { text?: string; translations?: { lang?: string; text?: string }[][] }[]
     }
     const out: { text: string; translation: string }[] = []
+    const seen = new Set<string>()
     for (const r of data.results ?? []) {
       let pt = ''
       for (const group of r.translations ?? []) {
@@ -75,7 +76,11 @@ async function tatoeba(query: string, limit: number): Promise<{ text: string; tr
         }
         if (pt) break
       }
-      if (r.text && pt) out.push({ text: r.text, translation: pt })
+      const key = r.text?.trim().toLowerCase()
+      if (r.text && pt && key && !seen.has(key)) {
+        seen.add(key)
+        out.push({ text: r.text, translation: pt })
+      }
       if (out.length >= limit) break
     }
     return out

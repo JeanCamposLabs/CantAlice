@@ -118,6 +118,10 @@ conta do Spotify** e acompanhe a Alice no iPad e no celular. Usamos o
 3. **Edge Functions → Create a function**, nome **`progress`**, cole o conteúdo
    de [`supabase/functions/progress/index.ts`](supabase/functions/progress/index.ts)
    e **Deploy**. (Ou via CLI: `supabase functions deploy progress`.)
+   - ⚠️ **Desligue "Verify JWT"** na função (Settings da função). As novas chaves
+     do Supabase (`sb_publishable_…`) não são JWT, então com o gate ligado a
+     função recusa toda chamada do app. É seguro desligar: a `progress` confere a
+     identidade pelo token do Spotify por conta própria.
 4. Em **Project Settings → API**, copie o **Project URL** e a **anon public key**.
 5. No GitHub, em **Settings → Secrets and variables → Actions → Variables**,
    crie duas variáveis:
@@ -150,6 +154,10 @@ chave como **secret** (ela nunca vai para o navegador):
 1. **Edge Functions → Create a function**, nome **`translate`**, cole o conteúdo
    de [`supabase/functions/translate/index.ts`](supabase/functions/translate/index.ts)
    e **Deploy**. (Ou via CLI: `supabase functions deploy translate`.)
+   - ⚠️ **Desligue "Verify JWT"** nesta função também — senão o app cai no Google
+     + Wiktionary (sem DeepL nem Tatoeba). A `translate` não acessa dados de
+     usuário, então deixá-la sem gate é seguro. Quem usa a CLI já recebe isso via
+     [`supabase/config.toml`](supabase/config.toml).
 2. Pegue uma chave grátis em [DeepL API Free](https://www.deepl.com/pro-api)
    (500 mil caracteres/mês) e guarde como secret:
    - No painel: **Edge Functions → translate → Secrets → Add** `DEEPL_API_KEY`.

@@ -1,0 +1,21 @@
+# Supabase project config (used by the Supabase CLI on `functions deploy`).
+#
+# Both Edge Functions must run WITHOUT the platform's JWT gate:
+#
+#  • Supabase's new API keys are publishable keys (`sb_publishable_…`), which
+#    are NOT JWTs. With "Verify JWT" enabled the gateway rejects every call from
+#    the browser ("Invalid JWT") before the function code ever runs.
+#  • Neither function relies on Supabase Auth: `translate` needs no auth (it only
+#    translates), and `progress` authenticates the caller itself by verifying
+#    their Spotify token. So disabling the gate is safe.
+#
+# If you deploy via the dashboard instead of the CLI, turn OFF the per-function
+# "Verify JWT" / "Enforce JWT verification" toggle to the same effect.
+
+project_id = "cantalice"
+
+[functions.translate]
+verify_jwt = false
+
+[functions.progress]
+verify_jwt = false

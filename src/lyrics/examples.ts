@@ -50,10 +50,20 @@ async function wiktionaryExamples(word: string): Promise<string[]> {
       { definitions?: { examples?: string[]; parsedExamples?: { example?: string }[] }[] }[]
     >
     const out: string[] = []
+    const seen = new Set<string>()
+    const add = (raw: string) => {
+      const t = stripHtml(raw).trim()
+      // Wiktionary returns the same sentence in both `parsedExamples` and
+      // `examples`, so dedupe to avoid showing each example twice.
+      if (t && !seen.has(t)) {
+        seen.add(t)
+        out.push(t)
+      }
+    }
     for (const def of data.en ?? []) {
       for (const d of def.definitions ?? []) {
-        for (const pe of d.parsedExamples ?? []) if (pe.example) out.push(stripHtml(pe.example))
-        for (const e of d.examples ?? []) out.push(stripHtml(e))
+        for (const pe of d.parsedExamples ?? []) if (pe.example) add(pe.example)
+        for (const e of d.examples ?? []) add(e)
       }
     }
     return out
@@ -106,15 +116,31 @@ export async function fetchExamples(query: string, limit = 6): Promise<Example[]
 
   if (IS_TRANSLATE_BACKEND) {
     const bi = await backendExamples(q, limit)
-    if (bi.length) return bi.map((b) => ({ ...b, source: 'tatoeba' as const }))
+    if (bi.length) return dedupe(bi.map((b) => ({ ...b, source: 'tatoeba' as const })))
   }
 
   const [wikt, dict] = await Promise.all([wiktionaryExamples(q), dictionaryExamples(q)])
   const ranked = rankSentences(wikt.length ? wikt : dict, q).slice(0, limit)
   const source: Example['source'] = wikt.length ? 'wiktionary' : 'dictionary'
-  return Promise.all(
-    ranked.map(async (text) => ({ text, translation: await translate(text, { premium: true }), source })),
+  return dedupe(
+    await Promise.all(
+      ranked.map(async (text) => ({ text, translation: await translate(text, { premium: true }), source })),
+    ),
   )
+}
+
+/** Drop examples whose English text repeats (case-insensitive), keeping order. */
+function dedupe(list: Example[]): Example[] {
+  const seen = new Set<string>()
+  const out: Example[] = []
+  for (const e of list) {
+    const k = e.text.trim().toLowerCase()
+    if (k && !seen.has(k)) {
+      seen.add(k)
+      out.push(e)
+    }
+  }
+  return out
 }
 
 /** A single best example phrase for a saved word (used on review cards). */

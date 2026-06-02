@@ -6,6 +6,7 @@ import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
 import { fetchExample } from '../lyrics/examples'
 import { speak, canSpeak } from '../lib/speak'
 import { SpeakableText } from './SpeakableText'
+import { useUI } from '../store/useUI'
 
 /** Blank out the target word in an example so it can be produced from context. */
 function cloze(text: string, word: string) {
@@ -99,6 +100,11 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
 
   const grade = (rating: Rating) => {
     reviewCard(item.key, dir, rating)
+    // Celebrate the moment she reaches today's goal (fires once, on crossing).
+    const { reviewedToday, dailyGoal } = useLibrary.getState()
+    if (reviewedToday.count === dailyGoal) {
+      useUI.getState().celebrate(`Meta de hoje concluída! ${dailyGoal} revisões 🎉`)
+    }
     setRevealed(false)
     setTyped('')
     if (rating === 1) {

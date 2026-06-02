@@ -63,6 +63,9 @@ interface LibraryState {
   dailyNewLimit: number
   /** New cards already introduced today (resets each calendar day). */
   newStudied: { date: string | null; count: number }
+  /** Daily review goal (cards) and how many have been reviewed today. */
+  dailyGoal: number
+  reviewedToday: { date: string | null; count: number }
   /** Local-only marker for the one-time translation-quality refresh. */
   translationsVersion: number
 
@@ -87,6 +90,7 @@ interface LibraryState {
   /** Grade one of a word's two cards (1=Again … 4=Easy) and reschedule it. */
   reviewCard: (word: string, dir: ReviewDir, rating: Rating) => void
   setDailyNewLimit: (n: number) => void
+  setDailyGoal: (n: number) => void
   /** Replace a saved word's translation (and its example's) after re-translating. */
   refreshWordTranslation: (word: string, translation: string, exampleTranslation?: string) => void
   setTranslationsVersion: (v: number) => void
@@ -155,6 +159,8 @@ export const useLibrary = create<LibraryState>()(
       streak: { count: 0, lastDate: null },
       dailyNewLimit: 20,
       newStudied: { date: null, count: 0 },
+      dailyGoal: 10,
+      reviewedToday: { date: null, count: 0 },
       translationsVersion: 0,
 
       addSong: (track, status) =>
@@ -253,11 +259,13 @@ export const useLibrary = create<LibraryState>()(
           const today = todayKey()
           const studied =
             s.newStudied.date === today ? s.newStudied.count : 0
+          const reviewed = s.reviewedToday.date === today ? s.reviewedToday.count : 0
           return {
             streak: advanceStreak(s.streak),
             newStudied: wasNew
               ? { date: today, count: studied + 1 }
               : { date: today, count: studied },
+            reviewedToday: { date: today, count: reviewed + 1 },
             vocab: {
               ...s.vocab,
               [key]: { ...w, srs: { ...cards, [dir]: state } },
@@ -266,6 +274,8 @@ export const useLibrary = create<LibraryState>()(
         }),
 
       setDailyNewLimit: (n) => set({ dailyNewLimit: Math.max(0, Math.round(n)) }),
+
+      setDailyGoal: (n) => set({ dailyGoal: Math.max(1, Math.round(n)) }),
 
       refreshWordTranslation: (word, translation, exampleTranslation) =>
         set((s) => {
@@ -319,6 +329,17 @@ export function currentStreak(state: LibraryState): number {
   const { count, lastDate } = state.streak
   if (!lastDate) return 0
   return lastDate === todayKey() || lastDate === yesterdayKey() ? count : 0
+}
+
+/** Today's review-goal progress: cards reviewed vs the daily goal. */
+export function selectDailyProgress(state: LibraryState): {
+  done: number
+  goal: number
+  met: boolean
+} {
+  const done = state.reviewedToday.date === todayKey() ? state.reviewedToday.count : 0
+  const goal = state.dailyGoal
+  return { done, goal, met: done >= goal }
 }
 
 // — Spaced-repetition selectors —

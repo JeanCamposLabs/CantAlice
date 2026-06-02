@@ -1,4 +1,14 @@
-import { Home, Search, Library, BookHeart, Languages, LogOut, LogIn, HelpCircle } from 'lucide-react'
+import {
+  Home,
+  Search,
+  Library,
+  BookHeart,
+  Languages,
+  LogOut,
+  LogIn,
+  HelpCircle,
+  TrendingUp,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useNav, type View } from '../store/useNav'
@@ -15,6 +25,13 @@ const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
   { view: 'library', label: 'Minhas músicas', icon: Library },
   { view: 'vocab', label: 'Vocabulário', icon: BookHeart },
   { view: 'translate', label: 'Tradutor', icon: Languages },
+]
+
+// The desktop sidebar has room for Progresso; the mobile bottom bar keeps the
+// five primary destinations and reaches Progresso from the home screen instead.
+const SIDEBAR_ITEMS: typeof ITEMS = [
+  ...ITEMS,
+  { view: 'progress', label: 'Progresso', icon: TrendingUp },
 ]
 
 function NavButton({
@@ -147,7 +164,7 @@ export function Sidebar() {
         <Brand />
       </div>
       <nav className="mt-8 flex flex-col gap-1">
-        {ITEMS.map((item) => (
+        {SIDEBAR_ITEMS.map((item) => (
           <NavButton
             key={item.view}
             {...item}

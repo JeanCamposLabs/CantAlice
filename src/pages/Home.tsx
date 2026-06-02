@@ -1,16 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  Sparkles,
-  GraduationCap,
-  BookHeart,
-  Search,
-  Music2,
-  Heart,
-  Play,
-  Flame,
-  Check,
-  Brain,
-} from 'lucide-react'
+import { Sparkles, GraduationCap, BookHeart, Search, Music2, Heart, Play, Flame, Brain } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useSession } from '../store/useSession'
@@ -29,6 +18,7 @@ import { beginLogin } from '../spotify/auth'
 import { getTrack, type SpotifyTrack } from '../spotify/api'
 import { recommendedTracks } from '../spotify/recommend'
 import { AlbumArt } from '../components/AlbumArt'
+import { GoalRing } from '../components/GoalRing'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { greeting, plural } from '../lib/format'
 import { SetupNotice } from '../components/States'
@@ -151,6 +141,7 @@ function Dashboard({ name }: { name: string }) {
         due={counts.total}
         onReview={() => go('vocab', 'review')}
         onSing={() => go(recent[0] ? 'song' : 'search', recent[0]?.id)}
+        onOpenProgress={() => go('progress')}
       />
 
       {/* Stats */}
@@ -219,12 +210,14 @@ function TodayCard({
   due,
   onReview,
   onSing,
+  onOpenProgress,
 }: {
   progress: { done: number; goal: number; met: boolean }
   streak: number
   due: number
   onReview: () => void
   onSing: () => void
+  onOpenProgress: () => void
 }) {
   const { done, goal, met } = progress
 
@@ -247,7 +240,11 @@ function TodayCard({
       className="glass-strong rounded-3xl p-6 sm:p-7"
     >
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-5">
+        <button
+          onClick={onOpenProgress}
+          title="Ver seu progresso"
+          className="-m-2 flex items-center gap-5 rounded-2xl p-2 text-left transition-colors hover:bg-white/5"
+        >
           <GoalRing done={done} goal={goal} met={met} />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm font-medium text-peach">
@@ -259,7 +256,7 @@ function TodayCard({
             <h2 className="mt-1 font-display text-2xl sm:text-3xl">{title}</h2>
             <p className="mt-1 text-sm text-mist/70">{subtitle}</p>
           </div>
-        </div>
+        </button>
 
         <div className="flex shrink-0 gap-2">
           {due > 0 ? (
@@ -285,40 +282,6 @@ function TodayCard({
         </div>
       </div>
     </motion.div>
-  )
-}
-
-function GoalRing({ done, goal, met }: { done: number; goal: number; met: boolean }) {
-  const r = 34
-  const circ = 2 * Math.PI * r
-  const pct = Math.min(1, goal > 0 ? done / goal : 0)
-  return (
-    <div className="relative grid h-24 w-24 shrink-0 place-items-center">
-      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90">
-        <circle cx="40" cy="40" r={r} className="fill-none stroke-white/10" strokeWidth="7" />
-        <circle
-          cx="40"
-          cy="40"
-          r={r}
-          className={`fill-none ${met ? 'stroke-gold' : 'stroke-rose-400'}`}
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - pct)}
-          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.22,1,0.36,1)' }}
-        />
-      </svg>
-      <div className="absolute flex flex-col items-center leading-none">
-        {met ? (
-          <Check size={30} className="text-gold" />
-        ) : (
-          <>
-            <span className="font-display text-2xl text-cream">{done}</span>
-            <span className="text-xs text-mist/50">de {goal}</span>
-          </>
-        )}
-      </div>
-    </div>
   )
 }
 

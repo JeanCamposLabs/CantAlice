@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Languages, ArrowRight, Volume2, Loader2, BookmarkPlus, BookmarkCheck } from 'lucide-react'
+import { Languages, ArrowRight, Volume2, Loader2, BookmarkPlus, BookmarkCheck, Lightbulb } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { translate } from '../lyrics/translate'
 import { fetchExamples, type Example } from '../lyrics/examples'
+import { lookupIdiom } from '../lyrics/idioms'
 import { useLibrary, selectWord } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
 import { SpeakableText } from '../components/SpeakableText'
@@ -35,6 +36,8 @@ export function TranslatePage() {
       setLoadingE(false)
     })
   }
+
+  const idiom = term ? lookupIdiom(term) : null
 
   return (
     <div className="space-y-8">
@@ -102,6 +105,14 @@ export function TranslatePage() {
                   )}
                 </div>
               </div>
+              {idiom && (
+                <div className="mt-3 flex items-start gap-2 rounded-2xl bg-gold/10 px-4 py-3 text-sm text-gold/90">
+                  <Lightbulb size={18} className="mt-0.5 shrink-0" />
+                  <span>
+                    <strong className="font-semibold">É uma expressão!</strong> {idiom}
+                  </span>
+                </div>
+              )}
               <div className="mt-4 flex justify-center border-t border-white/10 pt-4">
                 <SpeechCheck target={term} label="Praticar pronúncia" />
               </div>

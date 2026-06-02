@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Volume2, PartyPopper, Eye, Loader2 } from 'lucide-react'
+import { Volume2, PartyPopper, Eye, Loader2, Mic } from 'lucide-react'
 import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '../store/useLibrary'
 import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
 import { fetchExample } from '../lyrics/examples'
 import { speak, canSpeak } from '../lib/speak'
+import { canListen, listenOnce } from '../lib/listen'
 import { SpeakableText } from './SpeakableText'
 import { useUI } from '../store/useUI'
 
@@ -206,6 +207,34 @@ function PhraseLoading() {
   )
 }
 
+/** Speak your answer instead of typing it (fills the input via recognition). */
+function MicAnswerButton({ onResult }: { onResult: (text: string) => void }) {
+  const [listening, setListening] = useState(false)
+  if (!canListen) return null
+  const run = async () => {
+    setListening(true)
+    try {
+      const said = await listenOnce('en-US')
+      if (said) onResult(said)
+    } catch {
+      /* permission denied / nothing heard — ignore, she can type */
+    }
+    setListening(false)
+  }
+  return (
+    <button
+      onClick={run}
+      disabled={listening}
+      title="Falar a resposta"
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl transition-colors ${
+        listening ? 'bg-rose-500/30 text-rose-100' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
+      }`}
+    >
+      <Mic size={18} className={listening ? 'animate-pulse' : ''} />
+    </button>
+  )
+}
+
 const SpeakButton = ({ text, size = 18 }: { text: string; size?: number }) =>
   canSpeak ? (
     <button
@@ -302,16 +331,25 @@ function RevCard({
           ) : fetching ? (
             <PhraseLoading />
           ) : null}
-          <input
-            autoFocus
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onEnter()}
-            placeholder="palavra que falta…"
-            className="mt-1 w-60 rounded-2xl border border-white/12 bg-white/5 px-4 py-2.5 text-center text-lg outline-none placeholder:text-mist/35 focus:border-aurora-3/50"
-          />
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onEnter()}
+              placeholder="palavra que falta…"
+              className="w-60 rounded-2xl border border-white/12 bg-white/5 px-4 py-2.5 text-center text-lg outline-none placeholder:text-mist/35 focus:border-aurora-3/50"
+            />
+            <MicAnswerButton
+              onResult={(t) => {
+                setTyped(t)
+                onEnter()
+              }}
+            />
+          </div>
           <span className="text-sm text-mist/45">
             {en ? 'Complete a frase em inglês' : 'Como se diz em inglês?'}
+            {canListen && ' — ou toque no microfone e fale'}
           </span>
         </>
       ) : (

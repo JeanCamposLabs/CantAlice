@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Volume2, PartyPopper, Eye, Loader2, Mic } from 'lucide-react'
 import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '../store/useLibrary'
@@ -71,7 +71,35 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
     [item, liveState],
   )
 
+  // Keyboard shortcuts: Space/Enter reveals, 1–4 grades. A ref holds the latest
+  // handlers so the listener (mounted once) always calls the current card's.
+  const keyApi = useRef<{
+    revealed: boolean
+    reveal: () => void
+    grade: (r: Rating) => void
+  } | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const api = keyApi.current
+      if (!api) return
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+      const typing = tag === 'input' || tag === 'textarea'
+      if (!api.revealed) {
+        if (!typing && (e.key === ' ' || e.key === 'Enter')) {
+          e.preventDefault()
+          api.reveal()
+        }
+      } else if (e.key >= '1' && e.key <= '4') {
+        e.preventDefault()
+        api.grade(Number(e.key) as Rating)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   if (!item) {
+    keyApi.current = null
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
@@ -125,6 +153,9 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
 
   const reveal = () => setRevealed(true)
   const typedCorrect = revealed && dir === 'rev' && norm(typed) === norm(word.word)
+
+  // Keep the keyboard handler pointed at the current card's actions.
+  keyApi.current = { revealed, reveal, grade }
 
   const remaining = queue.length - pos
   const progress = queue.length ? (pos / queue.length) * 100 : 0
@@ -194,6 +225,10 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
           ))}
         </div>
       )}
+
+      <p className="hidden text-center text-xs text-mist/35 sm:block">
+        {revealed ? 'Atalhos: 1–4 para responder' : 'Atalho: espaço ou enter para mostrar'}
+      </p>
     </div>
   )
 }

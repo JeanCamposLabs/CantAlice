@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, GraduationCap, BookHeart, Search, Music2, Heart, Play, Flame, Brain } from 'lucide-react'
+import {
+  Sparkles,
+  GraduationCap,
+  BookHeart,
+  Search,
+  Music2,
+  Heart,
+  Play,
+  Flame,
+  Brain,
+  Volume2,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useSession } from '../store/useSession'
@@ -11,6 +22,7 @@ import {
   selectReviewCounts,
   selectDailyProgress,
   type SavedSong,
+  type VocabWord,
 } from '../store/useLibrary'
 import { useNav } from '../store/useNav'
 import { useUI } from '../store/useUI'
@@ -19,6 +31,9 @@ import { getTrack, type SpotifyTrack } from '../spotify/api'
 import { recommendedTracks } from '../spotify/recommend'
 import { AlbumArt } from '../components/AlbumArt'
 import { GoalRing } from '../components/GoalRing'
+import { SpeakableText } from '../components/SpeakableText'
+import { SpeechCheck } from '../components/SpeechCheck'
+import { speak, canSpeak } from '../lib/speak'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { greeting, plural } from '../lib/format'
 import { SetupNotice } from '../components/States'
@@ -169,6 +184,9 @@ function Dashboard({ name }: { name: string }) {
         />
       </div>
 
+      {/* Word of the day */}
+      {vocab.length > 0 && <WordOfDay words={vocab} />}
+
       {/* Continue practising */}
       {recent.length > 0 && (
         <section>
@@ -282,6 +300,52 @@ function TodayCard({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+// — Word of the day: a saved word resurfaced, chosen deterministically by date —
+function WordOfDay({ words }: { words: VocabWord[] }) {
+  const today = new Date()
+  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
+  const w = words[seed % words.length]
+  if (!w) return null
+
+  return (
+    <section>
+      <SectionTitle>Palavra do dia</SectionTitle>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass rounded-3xl p-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-display text-3xl text-cream">{w.word}</span>
+            {canSpeak && (
+              <button
+                onClick={() => speak(w.word)}
+                title="Ouvir pronúncia"
+                className="grid h-9 w-9 place-items-center rounded-full bg-white/8 text-aurora-3 hover:bg-white/15"
+              >
+                <Volume2 size={16} />
+              </button>
+            )}
+            <span className="ml-1 font-display text-2xl text-rose-300">{w.translation}</span>
+          </div>
+          <SpeechCheck target={w.word} label="Falar" />
+        </div>
+        {w.example?.text && (
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <p className="leading-snug text-cream">
+              <SpeakableText text={w.example.text} highlight={w.word} />
+            </p>
+            {w.example.translation && (
+              <p className="mt-0.5 text-sm italic text-rose-300/80">{w.example.translation}</p>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </section>
   )
 }
 

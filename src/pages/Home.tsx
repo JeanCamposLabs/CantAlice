@@ -1,4 +1,16 @@
-import { Sparkles, GraduationCap, BookHeart, Search, Music2, Heart, Play, Flame } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  Sparkles,
+  GraduationCap,
+  BookHeart,
+  Search,
+  Music2,
+  Heart,
+  Play,
+  Flame,
+  Check,
+  Brain,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useSession } from '../store/useSession'
@@ -7,12 +19,15 @@ import {
   selectSongs,
   selectVocab,
   currentStreak,
+  selectReviewCounts,
+  selectDailyProgress,
   type SavedSong,
 } from '../store/useLibrary'
 import { useNav } from '../store/useNav'
 import { useUI } from '../store/useUI'
 import { beginLogin } from '../spotify/auth'
-import { getTrack } from '../spotify/api'
+import { getTrack, type SpotifyTrack } from '../spotify/api'
+import { recommendedTracks } from '../spotify/recommend'
 import { AlbumArt } from '../components/AlbumArt'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { greeting, plural } from '../lib/format'
@@ -115,6 +130,8 @@ function Dashboard({ name }: { name: string }) {
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const vocab = useLibrary(useShallow(selectVocab))
   const streak = useLibrary(currentStreak)
+  const progress = useLibrary(useShallow(selectDailyProgress))
+  const counts = useLibrary(useShallow((s) => selectReviewCounts(s)))
   const go = useNav((s) => s.go)
 
   const recent = [...learning, ...known]
@@ -122,12 +139,22 @@ function Dashboard({ name }: { name: string }) {
     .sort((a, b) => (b.lastPracticedAt ?? 0) - (a.lastPracticedAt ?? 0))
     .slice(0, 4)
 
+  const hasSongs = learning.length > 0 || known.length > 0
+
   return (
     <div className="space-y-10 pt-2">
       <Hero name={name} />
 
+      <TodayCard
+        progress={progress}
+        streak={streak}
+        due={counts.total}
+        onReview={() => go('vocab', 'review')}
+        onSing={() => go(recent[0] ? 'song' : 'search', recent[0]?.id)}
+      />
+
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard
           icon={<Sparkles />}
           value={learning.length}
@@ -149,13 +176,6 @@ function Dashboard({ name }: { name: string }) {
           tone="aurora"
           onClick={() => go('vocab')}
         />
-        <StatCard
-          icon={<Flame />}
-          value={streak}
-          label={`${plural(streak, 'dia', 'dias')} seguidos`}
-          tone="flame"
-          onClick={() => go('search')}
-        />
       </div>
 
       {/* Continue practising */}
@@ -171,7 +191,7 @@ function Dashboard({ name }: { name: string }) {
       )}
 
       {/* Empty / first-run nudge */}
-      {learning.length === 0 && known.length === 0 && (
+      {!hasSongs && (
         <div className="glass flex flex-col items-center gap-4 rounded-3xl p-10 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-3xl bg-rose-400/15 text-rose-300">
             <Heart size={30} />
@@ -186,23 +206,190 @@ function Dashboard({ name }: { name: string }) {
         </div>
       )}
 
-      {/* Want to learn preview */}
-      {learning.length > 0 && (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <SectionTitle>Quero aprender</SectionTitle>
-            <button onClick={() => go('library')} className="text-sm text-rose-300 hover:underline">
-              ver todas
-            </button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {learning.slice(0, 4).map((s) => (
-              <ContinueCard key={s.id} song={s} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Recommendations — songs to sing along to */}
+      <Recommendations songs={[...learning, ...known]} />
     </div>
+  )
+}
+
+// — "Today" hub: daily goal ring + streak + one clear next step —
+function TodayCard({
+  progress,
+  streak,
+  due,
+  onReview,
+  onSing,
+}: {
+  progress: { done: number; goal: number; met: boolean }
+  streak: number
+  due: number
+  onReview: () => void
+  onSing: () => void
+}) {
+  const { done, goal, met } = progress
+
+  const title = met
+    ? 'Meta de hoje concluída! 🎉'
+    : due > 0
+      ? 'Hora de revisar'
+      : 'Pronta para praticar?'
+  const subtitle = met
+    ? 'Você arrasou hoje. Que tal cantar uma música para comemorar?'
+    : due > 0
+      ? `${due} ${plural(due, 'palavra', 'palavras')} te esperando para hoje.`
+      : 'Cante uma música e guarde palavras novas para revisar.'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="glass-strong rounded-3xl p-6 sm:p-7"
+    >
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-5">
+          <GoalRing done={done} goal={goal} met={met} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-peach">
+              <Flame size={16} />
+              {streak > 0
+                ? `${streak} ${plural(streak, 'dia', 'dias')} seguidos`
+                : 'Comece sua sequência hoje'}
+            </div>
+            <h2 className="mt-1 font-display text-2xl sm:text-3xl">{title}</h2>
+            <p className="mt-1 text-sm text-mist/70">{subtitle}</p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 gap-2">
+          {due > 0 ? (
+            <>
+              <button onClick={onReview} className="btn-primary">
+                <Brain size={18} /> Revisar {due}
+              </button>
+              {met && (
+                <button
+                  onClick={onSing}
+                  className="grid place-items-center rounded-2xl bg-white/8 px-4 text-cream hover:bg-white/15"
+                  title="Cantar uma música"
+                >
+                  <Music2 size={18} />
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={onSing} className="btn-primary">
+              <Music2 size={18} /> Cantar uma música
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function GoalRing({ done, goal, met }: { done: number; goal: number; met: boolean }) {
+  const r = 34
+  const circ = 2 * Math.PI * r
+  const pct = Math.min(1, goal > 0 ? done / goal : 0)
+  return (
+    <div className="relative grid h-24 w-24 shrink-0 place-items-center">
+      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90">
+        <circle cx="40" cy="40" r={r} className="fill-none stroke-white/10" strokeWidth="7" />
+        <circle
+          cx="40"
+          cy="40"
+          r={r}
+          className={`fill-none ${met ? 'stroke-gold' : 'stroke-rose-400'}`}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.22,1,0.36,1)' }}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center leading-none">
+        {met ? (
+          <Check size={30} className="text-gold" />
+        ) : (
+          <>
+            <span className="font-display text-2xl text-cream">{done}</span>
+            <span className="text-xs text-mist/50">de {goal}</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// — "Songs at your level" / discovery row —
+function Recommendations({ songs }: { songs: SavedSong[] }) {
+  const [tracks, setTracks] = useState<SpotifyTrack[] | null>(null)
+  const sig = songs.map((s) => s.id).join(',')
+
+  useEffect(() => {
+    let alive = true
+    recommendedTracks(songs)
+      .then((t) => alive && setTracks(t))
+      .catch(() => alive && setTracks([]))
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig])
+
+  // Hide entirely if we tried and found nothing (e.g. offline / search blocked).
+  if (tracks && tracks.length === 0) return null
+
+  return (
+    <section>
+      <SectionTitle>Para você cantar</SectionTitle>
+      {!tracks ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="glass h-[4.75rem] animate-pulse rounded-2xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {tracks.map((t) => (
+            <RecCard key={t.id} track={t} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function RecCard({ track }: { track: SpotifyTrack }) {
+  const go = useNav((s) => s.go)
+  const setActiveTrack = useSession((s) => s.setActiveTrack)
+  const image = track.album.images[1]?.url ?? track.album.images[0]?.url ?? null
+
+  const open = () => {
+    go('song', track.id)
+    setActiveTrack(track)
+  }
+
+  return (
+    <motion.button
+      whileHover={{ y: -2 }}
+      onClick={open}
+      className="glass group flex items-center gap-4 rounded-2xl p-3 text-left"
+    >
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+        <AlbumArt src={image} alt={`Capa de ${track.name}`} fallbackIcon={<Music2 />} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{track.name}</div>
+        <div className="truncate text-sm text-mist/60">
+          {track.artists.map((a) => a.name).join(', ')}
+        </div>
+      </div>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-cream transition-colors group-hover:bg-rose-400 group-hover:text-night-900">
+        <Play size={18} className="ml-0.5" fill="currentColor" />
+      </span>
+    </motion.button>
   )
 }
 

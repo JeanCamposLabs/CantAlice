@@ -11,11 +11,14 @@ import {
 import { EmptyState } from '../components/States'
 import { ReviewSession } from '../components/ReviewSession'
 import { speak, canSpeak } from '../lib/speak'
+import { useNav } from '../store/useNav'
 
 export function VocabularyPage() {
   const words = useLibrary(useShallow(selectVocab))
   const counts = useLibrary(useShallow((s) => selectReviewCounts(s)))
-  const [mode, setMode] = useState<'list' | 'review'>('list')
+  // Deep link: arriving at #/vocab/review (e.g. the home CTA) opens review.
+  const deepLinkReview = useNav((s) => s.trackId) === 'review'
+  const [mode, setMode] = useState<'list' | 'review'>(deepLinkReview ? 'review' : 'list')
 
   return (
     <div className="space-y-8">

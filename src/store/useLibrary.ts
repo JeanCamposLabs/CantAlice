@@ -66,6 +66,8 @@ interface LibraryState {
   /** Daily review goal (cards) and how many have been reviewed today. */
   dailyGoal: number
   reviewedToday: { date: string | null; count: number }
+  /** Cards reviewed per calendar day (YYYY-MM-DD → count), for the activity chart. */
+  history: Record<string, number>
   /** Local-only marker for the one-time translation-quality refresh. */
   translationsVersion: number
 
@@ -161,6 +163,7 @@ export const useLibrary = create<LibraryState>()(
       newStudied: { date: null, count: 0 },
       dailyGoal: 10,
       reviewedToday: { date: null, count: 0 },
+      history: {},
       translationsVersion: 0,
 
       addSong: (track, status) =>
@@ -266,6 +269,7 @@ export const useLibrary = create<LibraryState>()(
               ? { date: today, count: studied + 1 }
               : { date: today, count: studied },
             reviewedToday: { date: today, count: reviewed + 1 },
+            history: { ...s.history, [today]: (s.history[today] ?? 0) + 1 },
             vocab: {
               ...s.vocab,
               [key]: { ...w, srs: { ...cards, [dir]: state } },
@@ -340,6 +344,41 @@ export function selectDailyProgress(state: LibraryState): {
   const done = state.reviewedToday.date === todayKey() ? state.reviewedToday.count : 0
   const goal = state.dailyGoal
   return { done, goal, met: done >= goal }
+}
+
+/** Cards reviewed on each of the last `days` calendar days (oldest first). */
+export function selectActivity(
+  state: LibraryState,
+  days = 14,
+): { date: string; label: string; count: number }[] {
+  const out: { date: string; label: string; count: number }[] = []
+  const d = new Date()
+  d.setDate(d.getDate() - (days - 1))
+  for (let i = 0; i < days; i++) {
+    const key = todayKey(d)
+    out.push({ date: key, label: String(d.getDate()), count: state.history[key] ?? 0 })
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
+/** A word counts as "mastered" once both its cards are stable (~3+ weeks). */
+const MASTERED_STABILITY_DAYS = 21
+export function selectMasteredCount(state: LibraryState): number {
+  let n = 0
+  for (const word of Object.values(state.vocab)) {
+    const cards = word.srs
+    if (
+      cards &&
+      !isNew(cards.fwd) &&
+      !isNew(cards.rev) &&
+      cards.fwd.stability >= MASTERED_STABILITY_DAYS &&
+      cards.rev.stability >= MASTERED_STABILITY_DAYS
+    ) {
+      n++
+    }
+  }
+  return n
 }
 
 // — Spaced-repetition selectors —

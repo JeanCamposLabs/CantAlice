@@ -7,6 +7,7 @@ import { fetchExamples, type Example } from '../lyrics/examples'
 import { useLibrary, selectWord } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
 import { SpeakableText } from '../components/SpeakableText'
+import { SpeechCheck } from '../components/SpeechCheck'
 
 export function TranslatePage() {
   const [query, setQuery] = useState('')
@@ -100,6 +101,9 @@ export function TranslatePage() {
                     translation
                   )}
                 </div>
+              </div>
+              <div className="mt-4 flex justify-center border-t border-white/10 pt-4">
+                <SpeechCheck target={term} label="Praticar pronúncia" />
               </div>
             </div>
 

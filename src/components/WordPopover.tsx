@@ -6,6 +6,8 @@ import { translate } from '../lyrics/translate'
 import { fetchExample, type Example } from '../lyrics/examples'
 import { useLibrary } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
+import { SpeakableText } from './SpeakableText'
+import { SpeechCheck } from './SpeechCheck'
 
 export interface WordSelection {
   word: string
@@ -14,22 +16,6 @@ export interface WordSelection {
   songName: string | null
   /** The lyric line the word was tapped in (used as an example fallback). */
   line?: string
-}
-
-/** Wrap occurrences of `word` (stem match) in <strong> for the example phrase. */
-function emphasize(text: string, word: string): React.ReactNode {
-  const re = new RegExp(`(\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i')
-  const parts = text.split(re)
-  if (parts.length === 1) return text
-  return parts.map((p, i) =>
-    re.test(p) ? (
-      <strong key={i} className="text-cream">
-        {p}
-      </strong>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
-  )
 }
 
 /**
@@ -137,6 +123,10 @@ export function WordPopover({
           )}
         </div>
 
+        <div className="mt-2 flex justify-center">
+          <SpeechCheck target={cleanWord} label="Falar" />
+        </div>
+
         {/* Real-world example phrase (Reverso-Context style) */}
         <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
           <div className="text-[0.65rem] uppercase tracking-[0.18em] text-mist/45">Exemplo</div>
@@ -147,7 +137,7 @@ export function WordPopover({
           ) : example ? (
             <>
               <p className="mt-0.5 text-sm leading-snug text-mist/85">
-                {emphasize(example.text, cleanWord)}
+                <SpeakableText text={example.text} highlight={cleanWord} />
               </p>
               <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">
                 {example.translation}

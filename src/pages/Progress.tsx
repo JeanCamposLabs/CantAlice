@@ -23,6 +23,8 @@ export function ProgressPage() {
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const dailyGoal = useLibrary((s) => s.dailyGoal)
   const setDailyGoal = useLibrary((s) => s.setDailyGoal)
+  const dailyNewLimit = useLibrary((s) => s.dailyNewLimit)
+  const setDailyNewLimit = useLibrary((s) => s.setDailyNewLimit)
   const go = useNav((s) => s.go)
 
   const maxBar = Math.max(dailyGoal, ...activity.map((a) => a.count), 1)
@@ -60,27 +62,26 @@ export function ProgressPage() {
           </div>
         </div>
 
-        {/* Daily goal stepper */}
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-xs uppercase tracking-[0.18em] text-mist/45">Meta diária</span>
-          <div className="flex items-center gap-3">
-            <StepButton
-              label="Diminuir meta"
-              onClick={() => setDailyGoal(Math.max(5, dailyGoal - 5))}
-              disabled={dailyGoal <= 5}
-            >
-              <Minus size={18} />
-            </StepButton>
-            <span className="w-12 text-center font-display text-3xl text-cream">{dailyGoal}</span>
-            <StepButton
-              label="Aumentar meta"
-              onClick={() => setDailyGoal(Math.min(50, dailyGoal + 5))}
-              disabled={dailyGoal >= 50}
-            >
-              <Plus size={18} />
-            </StepButton>
-          </div>
-          <span className="text-xs text-mist/45">cartões por dia</span>
+        {/* Goal + pacing controls */}
+        <div className="flex gap-8">
+          <Stepper
+            title="Meta diária"
+            sub="cartões/dia"
+            value={dailyGoal}
+            onDec={() => setDailyGoal(Math.max(5, dailyGoal - 5))}
+            onInc={() => setDailyGoal(Math.min(50, dailyGoal + 5))}
+            decDisabled={dailyGoal <= 5}
+            incDisabled={dailyGoal >= 50}
+          />
+          <Stepper
+            title="Palavras novas"
+            sub="por dia"
+            value={dailyNewLimit}
+            onDec={() => setDailyNewLimit(Math.max(0, dailyNewLimit - 5))}
+            onInc={() => setDailyNewLimit(Math.min(50, dailyNewLimit + 5))}
+            decDisabled={dailyNewLimit <= 0}
+            incDisabled={dailyNewLimit >= 50}
+          />
         </div>
       </motion.div>
 
@@ -131,6 +132,40 @@ export function ProgressPage() {
           <Brain size={18} /> Revisar agora
         </button>
       </div>
+    </div>
+  )
+}
+
+function Stepper({
+  title,
+  sub,
+  value,
+  onDec,
+  onInc,
+  decDisabled,
+  incDisabled,
+}: {
+  title: string
+  sub: string
+  value: number
+  onDec: () => void
+  onInc: () => void
+  decDisabled?: boolean
+  incDisabled?: boolean
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-xs uppercase tracking-[0.18em] text-mist/45">{title}</span>
+      <div className="flex items-center gap-2.5">
+        <StepButton label={`Diminuir ${title}`} onClick={onDec} disabled={decDisabled}>
+          <Minus size={18} />
+        </StepButton>
+        <span className="w-10 text-center font-display text-3xl text-cream">{value}</span>
+        <StepButton label={`Aumentar ${title}`} onClick={onInc} disabled={incDisabled}>
+          <Plus size={18} />
+        </StepButton>
+      </div>
+      <span className="text-xs text-mist/45">{sub}</span>
     </div>
   )
 }

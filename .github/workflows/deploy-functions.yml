@@ -1,0 +1,44 @@
+name: Deploy Supabase functions
+
+# The website deploys to GitHub Pages automatically, but the Edge Functions
+# (translate / progress) are a SEPARATE deploy. This runs `supabase functions
+# deploy` whenever the function source changes, so fixes go live without a
+# manual step.
+#
+# One-time setup: add a repository secret SUPABASE_ACCESS_TOKEN
+# (Supabase dashboard → Account → Access Tokens). Without it, this job is
+# skipped — nothing breaks, it just won't auto-deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch: {}
+
+# The project ref is also embedded in the public app bundle, so it isn't secret.
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  PROJECT_REF: kpdmrcvtqeomxmosjvuf
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy functions
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: supabase functions deploy --project-ref "$PROJECT_REF"
+
+      - name: Notice when not configured
+        if: env.SUPABASE_ACCESS_TOKEN == ''
+        run: echo "SUPABASE_ACCESS_TOKEN not set — skipping function deploy. Add the secret to enable auto-deploy."

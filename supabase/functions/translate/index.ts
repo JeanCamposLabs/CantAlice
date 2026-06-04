@@ -83,7 +83,7 @@ async function tatoeba(query: string, limit: number): Promise<{ text: string; tr
           if (pt) break
         }
         const key = r.text?.trim().toLowerCase()
-        if (r.text && pt && key && !seen.has(key)) {
+        if (r.text && pt && key && isAppropriate(r.text) && !seen.has(key)) {
           seen.add(key)
           cands.push({ text: r.text, translation: pt })
         }
@@ -110,6 +110,26 @@ const SLANG = new Set([
   'pwned', 'pwn', 'noob', 'newb', 'lol', 'lmao', 'rofl', 'omg', 'wtf', 'imo', 'imho',
   'selfie', 'meme', 'memes', 'yolo', 'bae', 'derp', 'troll', 'trolled', 'photobomb',
 ])
+
+/**
+ * This is a children's learning app, so example sentences must be safe. Tatoeba
+ * is a general corpus that includes adult/violent sentences ("I've been
+ * raped."), which are filtered out entirely here. Matched on word boundaries so
+ * innocent substrings ("class", "assignment") are never caught.
+ */
+const UNSAFE = [
+  'rape', 'raped', 'rapist', 'sex', 'sexual', 'sexy', 'porn', 'naked', 'nude', 'nudity',
+  'penis', 'vagina', 'breast', 'breasts', 'orgasm', 'condom', 'horny', 'whore', 'slut',
+  'kill', 'killed', 'killing', 'murder', 'murdered', 'suicide', 'suicidal', 'corpse',
+  'drug', 'drugs', 'cocaine', 'heroin', 'meth', 'weed', 'drunk', 'beer', 'vodka', 'whisky',
+  'fuck', 'fucked', 'fucking', 'shit', 'bitch', 'bastard', 'damn', 'hell', 'ass', 'asshole',
+  'nigger', 'fag', 'gun', 'guns', 'shot', 'shoot', 'shooting', 'bomb', 'terrorist',
+  'die', 'died', 'death', 'dead', 'blood', 'bleeding', 'hate',
+]
+const UNSAFE_RE = new RegExp(`\\b(${UNSAFE.join('|')})\\b`, 'i')
+function isAppropriate(text: string): boolean {
+  return !UNSAFE_RE.test(text)
+}
 
 /** The set of "content" words in a sentence, minus stopwords and the query stem. */
 function contentSig(text: string, head: string): Set<string> {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Volume2, PartyPopper, Eye, Loader2, Mic } from 'lucide-react'
+import { Volume2, PartyPopper, Eye, Loader2, Mic, RefreshCw } from 'lucide-react'
 import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '../store/useLibrary'
 import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
-import { fetchExample } from '../lyrics/examples'
+import { fetchExample, fetchExamples } from '../lyrics/examples'
 import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
 import { SpeakableText } from './SpeakableText'
@@ -31,10 +31,12 @@ const RATINGS: { rating: Rating; label: string; cls: string }[] = [
 export function ReviewSession({ onExit }: { onExit: () => void }) {
   const reviewCard = useLibrary((s) => s.reviewCard)
   const setWordExample = useLibrary((s) => s.setWordExample)
+  const replaceWordExample = useLibrary((s) => s.replaceWordExample)
 
   // Snapshot the queue at session start; "Errei" cards are re-queued in-session.
   const [queue, setQueue] = useState<ReviewItem[]>(() => selectReviewQueue(useLibrary.getState()))
   const [pos, setPos] = useState(0)
+  const [swapping, setSwapping] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [typed, setTyped] = useState('')
   const [reviewed, setReviewed] = useState(0)
@@ -154,6 +156,23 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
   const reveal = () => setRevealed(true)
   const typedCorrect = revealed && dir === 'rev' && norm(typed) === norm(word.word)
 
+  // Fetch a fresh example for this word (e.g. when the current one is an
+  // obscure or awkward sentence) and replace it.
+  const swapExample = async () => {
+    if (swapping) return
+    setSwapping(true)
+    try {
+      const list = await fetchExamples(word.word, 6)
+      const current = word.example?.text
+      const others = list.filter((e) => e.text !== current)
+      const next = others.length ? others[Math.floor(Math.random() * others.length)] : list[0]
+      if (next) replaceWordExample(word.word, next)
+    } catch {
+      /* offline / no results — keep the current example */
+    }
+    setSwapping(false)
+  }
+
   // Keep the keyboard handler pointed at the current card's actions.
   keyApi.current = { revealed, reveal, grade }
 
@@ -203,6 +222,17 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
           />
         )}
       </motion.div>
+
+      {word.example?.text && (
+        <button
+          onClick={swapExample}
+          disabled={swapping}
+          className="mx-auto flex items-center gap-1.5 text-xs text-mist/40 transition-colors hover:text-mist/80 disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={swapping ? 'animate-spin' : ''} />
+          {swapping ? 'buscando outra frase…' : 'trocar frase de exemplo'}
+        </button>
+      )}
 
       {/* Actions */}
       {!revealed ? (

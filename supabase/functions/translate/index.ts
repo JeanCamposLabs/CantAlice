@@ -102,6 +102,15 @@ const STOPWORDS = new Set([
   'this', 'that', 'these', 'those', 'not', 'no', 'as', 'with', 'from', 'by',
 ])
 
+/**
+ * Internet/gaming slang and jargon that make confusing examples for a learner
+ * ("You've been pwned."). Sentences containing these are pushed to the back.
+ */
+const SLANG = new Set([
+  'pwned', 'pwn', 'noob', 'newb', 'lol', 'lmao', 'rofl', 'omg', 'wtf', 'imo', 'imho',
+  'selfie', 'meme', 'memes', 'yolo', 'bae', 'derp', 'troll', 'trolled', 'photobomb',
+])
+
 /** The set of "content" words in a sentence, minus stopwords and the query stem. */
 function contentSig(text: string, head: string): Set<string> {
   const words = (text.toLowerCase().match(/[a-z']+/g) ?? []).filter(
@@ -130,8 +139,15 @@ function selectVaried(
 ): { text: string; translation: string }[] {
   const head = query.toLowerCase().split(/\s+/)[0]?.slice(0, 5) ?? ''
   const enriched = cands.map((c) => {
-    const n = (c.text.match(/[A-Za-z']+/g) ?? []).length
-    return { ...c, sig: contentSig(c.text, head), lenPenalty: Math.abs(n - 8) + (n < 4 ? 6 : 0) }
+    const tokens = c.text.toLowerCase().match(/[a-z']+/g) ?? []
+    const n = tokens.length
+    const slang = tokens.filter((w) => SLANG.has(w)).length
+    return {
+      ...c,
+      sig: contentSig(c.text, head),
+      // Prefer a natural length (~8 words); push slang-laden sentences to the back.
+      lenPenalty: Math.abs(n - 8) + (n < 4 ? 6 : 0) + slang * 50,
+    }
   })
   // Stable-sort by how close to an ideal length; relevance order breaks ties.
   const ordered = enriched.map((c, i) => ({ c, i })).sort((x, y) => x.c.lenPenalty - y.c.lenPenalty || x.i - y.i).map((o) => o.c)
@@ -170,7 +186,20 @@ Deno.serve(async (req: Request) => {
     if (body.mode === 'examples') {
       const q = (body.word ?? body.query ?? '').toString().trim()
       if (!q) return json({ examples: [] })
-      return json({ examples: await tatoeba(q, Math.min(body.limit ?? 6, 12)) })
+      const examples = await tatoeba(q, Math.min(body.limit ?? 6, 12))
+      // Tatoeba's stored Portuguese mixes European and Brazilian dialects
+      // ("Foste hackeado." instead of "Você foi hackeado."). Re-translate the
+      // chosen sentences with DeepL for consistent pt-BR; fall back to the
+      // Tatoeba translation if DeepL is unavailable.
+      if (examples.length) {
+        const ptbr = await deepl(examples.map((e) => e.text))
+        if (ptbr) {
+          return json({
+            examples: examples.map((e, i) => ({ text: e.text, translation: ptbr[i] || e.translation })),
+          })
+        }
+      }
+      return json({ examples })
     }
 
     return json({ error: 'unknown mode' }, 400)

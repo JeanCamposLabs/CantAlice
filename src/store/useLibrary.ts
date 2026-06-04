@@ -89,6 +89,8 @@ interface LibraryState {
   hasWord: (word: string) => boolean
   /** Attach an example to a saved word if it doesn't already have one. */
   setWordExample: (word: string, example: Example) => void
+  /** Replace a saved word's example outright (e.g. "trocar frase"). */
+  replaceWordExample: (word: string, example: Example) => void
   /** Grade one of a word's two cards (1=Again … 4=Easy) and reschedule it. */
   reviewCard: (word: string, dir: ReviewDir, rating: Rating) => void
   setDailyNewLimit: (n: number) => void
@@ -248,6 +250,14 @@ export const useLibrary = create<LibraryState>()(
           const key = normWord(word)
           const w = s.vocab[key]
           if (!w || w.example) return s
+          return { vocab: { ...s.vocab, [key]: { ...w, example } } }
+        }),
+
+      replaceWordExample: (word, example) =>
+        set((s) => {
+          const key = normWord(word)
+          const w = s.vocab[key]
+          if (!w) return s
           return { vocab: { ...s.vocab, [key]: { ...w, example } } }
         }),
 

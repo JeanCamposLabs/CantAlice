@@ -21,6 +21,9 @@ export interface Snapshot {
   streak: { count: number; lastDate: string | null }
   dailyNewLimit: number
   newStudied: { date: string | null; count: number }
+  dailyGoal: number
+  reviewedToday: { date: string | null; count: number }
+  history: Record<string, number>
   showTranslations: boolean
   largeLyrics: boolean
   wordHintSeen: boolean
@@ -36,6 +39,9 @@ function getSnapshot(): Snapshot {
     streak: s.streak,
     dailyNewLimit: s.dailyNewLimit,
     newStudied: s.newStudied,
+    dailyGoal: s.dailyGoal,
+    reviewedToday: s.reviewedToday,
+    history: s.history,
     showTranslations: s.showTranslations,
     largeLyrics: s.largeLyrics,
     wordHintSeen: s.wordHintSeen,
@@ -51,6 +57,9 @@ function applySnapshot(snap: Snapshot): void {
     streak: snap.streak,
     dailyNewLimit: snap.dailyNewLimit ?? 20,
     newStudied: snap.newStudied ?? { date: null, count: 0 },
+    dailyGoal: snap.dailyGoal ?? 10,
+    reviewedToday: snap.reviewedToday ?? { date: null, count: 0 },
+    history: snap.history ?? {},
     showTranslations: snap.showTranslations,
     largeLyrics: snap.largeLyrics,
     wordHintSeen: snap.wordHintSeen,
@@ -100,12 +109,31 @@ export function mergeSnapshots(local: Snapshot, cloud: Snapshot | null): Snapsho
         ? cn
         : { date: ln.date, count: Math.max(ln.count, cn.count) }
 
+  // Reviewed-today counter: same rule (later day wins; max count on the same day).
+  const lr = local.reviewedToday ?? { date: null, count: 0 }
+  const cr = cloud.reviewedToday ?? { date: null, count: 0 }
+  const reviewedToday =
+    (lr.date ?? '') > (cr.date ?? '')
+      ? lr
+      : (cr.date ?? '') > (lr.date ?? '')
+        ? cr
+        : { date: lr.date, count: Math.max(lr.count, cr.count) }
+
+  // Activity history: keep the higher count for each day (no double-counting).
+  const history: Record<string, number> = { ...(cloud.history ?? {}) }
+  for (const [day, n] of Object.entries(local.history ?? {})) {
+    history[day] = Math.max(history[day] ?? 0, n)
+  }
+
   return {
     songs,
     vocab,
     streak,
     dailyNewLimit: newer.dailyNewLimit ?? 20,
     newStudied,
+    dailyGoal: newer.dailyGoal ?? 10,
+    reviewedToday,
+    history,
     showTranslations: newer.showTranslations,
     largeLyrics: newer.largeLyrics,
     wordHintSeen: local.wordHintSeen || cloud.wordHintSeen,

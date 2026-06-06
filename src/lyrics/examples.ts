@@ -95,10 +95,13 @@ function rankSentences(raw: string[], word: string): string[] {
   const re = new RegExp(`\\b${escapeRe(word.toLowerCase())}`, 'i')
   const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length
   const all = raw.flatMap(sentences)
+  // Cap length so we never surface long literary excerpts as "examples".
   const usable = all.filter(
-    (s) => re.test(s) && s.length >= 15 && s.length <= 140 && wordCount(s) >= 3,
+    (s) => re.test(s) && s.length >= 12 && wordCount(s) >= 3 && wordCount(s) <= 16,
   )
-  const pool = usable.length ? usable : all.filter((s) => re.test(s) && wordCount(s) >= 2)
+  const pool = usable.length
+    ? usable
+    : all.filter((s) => re.test(s) && wordCount(s) >= 2 && wordCount(s) <= 16)
   return pool.sort((a, b) => {
     const pa = /[.!?]$/.test(a) ? 0 : 1
     const pb = /[.!?]$/.test(b) ? 0 : 1

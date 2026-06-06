@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, Sparkles } from 'lucide-react'
+import { Mic, Send, Loader2, Volume2, Lightbulb, Music2 } from 'lucide-react'
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
@@ -56,7 +56,6 @@ export function ConversationPage() {
   const [messages, setMessages] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
   const [listening, setListening] = useState(false)
-  const [naturalVoice, setNaturalVoice] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -72,24 +71,40 @@ export function ConversationPage() {
 
   const historyTurns = (): Turn[] => messages.map((m) => ({ role: m.role, content: m.content }))
 
-  // Speak a reply: cloud audio when "natural voice" is on, else the instant
-  // browser voice (no extra round-trip).
+  // Always speak the reply in the natural cloud voice; fall back to the browser
+  // voice only if the server couldn't synthesize audio.
   const voiceReply = (r: ConverseResult) => {
-    if (naturalVoice && r.audio) void playBase64Mp3(r.audio)
+    if (r.audio) void playBase64Mp3(r.audio)
     else if (canSpeak) speak(r.reply)
   }
 
-  const send = async (opts: { text?: string; audioBase64?: string; audioMime?: string }) => {
+  const send = async (opts: {
+    text?: string
+    audioBase64?: string
+    audioMime?: string
+    /** Show this as the user's bubble immediately, before the reply arrives. */
+    display?: string
+  }) => {
     setBusy(true)
     setError(null)
     const history = historyTurns()
+    if (opts.display) setMessages((prev) => [...prev, { role: 'user', content: opts.display! }])
     try {
-      const r = await converse({ scenario: scenario.context, history, wantAudio: naturalVoice, ...opts })
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: r.transcript },
-        { role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio },
-      ])
+      const r = await converse({
+        scenario: scenario.context,
+        history,
+        wantAudio: true,
+        text: opts.text,
+        audioBase64: opts.audioBase64,
+        audioMime: opts.audioMime,
+      })
+      setMessages((prev) => {
+        const next = [...prev]
+        // If we didn't already show the user's message (Whisper path), add it now.
+        if (!opts.display) next.push({ role: 'user', content: r.transcript })
+        next.push({ role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio })
+        return next
+      })
       voiceReply(r)
     } catch (e) {
       setError(messageFromError(e, 'Algo deu errado. Tente de novo.'))
@@ -105,7 +120,7 @@ export function ConversationPage() {
     const ctx = SCENARIOS.find((s) => s.id === id)?.context ?? null
     setBusy(true)
     try {
-      const r = await converse({ scenario: ctx, history: [], text: KICKOFF, wantAudio: naturalVoice })
+      const r = await converse({ scenario: ctx, history: [], text: KICKOFF, wantAudio: true })
       setMessages([
         { role: 'user', content: KICKOFF, hidden: true },
         { role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio },
@@ -122,7 +137,7 @@ export function ConversationPage() {
     const t = text.trim()
     if (!t || busy) return
     setText('')
-    void send({ text: t })
+    void send({ text: t, display: t })
   }
 
   // Fast path: transcribe in the browser and send text (no upload / no Whisper).
@@ -133,7 +148,7 @@ export function ConversationPage() {
     try {
       const said = await listenOnce('en-US')
       setListening(false)
-      if (said.trim()) await send({ text: said })
+      if (said.trim()) await send({ text: said, display: said })
       else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
     } catch {
       setListening(false)
@@ -196,22 +211,11 @@ export function ConversationPage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] flex-col gap-4 lg:h-[calc(100dvh-3rem)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
-          <p className="mt-1 text-sm text-mist/65">
-            Fale ou escreva em inglês — o tutor responde e corrige com carinho.
-          </p>
-        </div>
-        <button
-          onClick={() => setNaturalVoice((v) => !v)}
-          title="Voz natural usa a IA de voz (mais bonita, porém mais lenta)"
-          className={`mt-1 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            naturalVoice ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
-          }`}
-        >
-          <Sparkles size={13} /> Voz natural: {naturalVoice ? 'on' : 'off'}
-        </button>
+      <div>
+        <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
+        <p className="mt-1 text-sm text-mist/65">
+          Fale ou escreva em inglês — o tutor responde em voz e corrige com carinho.
+        </p>
       </div>
 
       {/* Scenario chips */}

@@ -186,23 +186,38 @@ function Dashboard({ name }: { name: string }) {
         />
       </div>
 
-      {/* Everyday phrases entry */}
-      <motion.button
-        whileHover={{ y: -2 }}
-        onClick={() => go('phrases')}
-        className="glass flex w-full items-center gap-4 rounded-3xl p-5 text-left"
-      >
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-aurora-2/20 text-aurora-1">
-          <MessagesSquare size={22} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="font-display text-lg">Frases do dia a dia</div>
-          <div className="truncate text-sm text-mist/60">
-            Pedir um café, viajar, conversar — ouça e pratique falando.
+      {/* Practice entries */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <motion.button
+          whileHover={{ y: -2 }}
+          onClick={() => go('conversar')}
+          className="glass flex w-full items-center gap-4 rounded-3xl p-5 text-left"
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-rose-400/20 text-rose-300">
+            <Sparkles size={22} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-lg">Conversar com IA</div>
+            <div className="truncate text-sm text-mist/60">Fale em inglês e receba resposta em voz.</div>
           </div>
-        </div>
-        <ChevronRight size={20} className="shrink-0 text-mist/40" />
-      </motion.button>
+          <ChevronRight size={20} className="shrink-0 text-mist/40" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ y: -2 }}
+          onClick={() => go('phrases')}
+          className="glass flex w-full items-center gap-4 rounded-3xl p-5 text-left"
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-aurora-2/20 text-aurora-1">
+            <MessagesSquare size={22} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-lg">Frases do dia a dia</div>
+            <div className="truncate text-sm text-mist/60">Pedir um café, viajar, conversar.</div>
+          </div>
+          <ChevronRight size={20} className="shrink-0 text-mist/40" />
+        </motion.button>
+      </div>
 
       {/* Word of the day */}
       {vocab.length > 0 && <WordOfDay words={vocab} />}

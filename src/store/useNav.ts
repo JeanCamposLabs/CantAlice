@@ -14,6 +14,7 @@ export type View =
   | 'song'
   | 'progress'
   | 'phrases'
+  | 'conversar'
 
 interface NavState {
   view: View
@@ -33,6 +34,7 @@ function parseHash(): { view: View; trackId: string | null } {
     'song',
     'progress',
     'phrases',
+    'conversar',
   ]
   if (valid.includes(view as View)) {
     return { view: view as View, trackId: id ?? null }

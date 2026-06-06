@@ -19,6 +19,7 @@ import { TranslatePage } from './pages/Translate'
 import { KaraokePage } from './pages/Karaoke'
 import { ProgressPage } from './pages/Progress'
 import { PhrasesPage } from './pages/Phrases'
+import { ConversationPage } from './pages/Conversation'
 import { useNav } from './store/useNav'
 import { useSession } from './store/useSession'
 import {
@@ -171,6 +172,8 @@ function Page({ view }: { view: ReturnType<typeof useNav.getState>['view'] }) {
       return <ProgressPage />
     case 'phrases':
       return <PhrasesPage />
+    case 'conversar':
+      return <ConversationPage />
     case 'song':
       return <KaraokePage />
     default:

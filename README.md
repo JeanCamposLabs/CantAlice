@@ -167,6 +167,29 @@ chave como **secret** (ela nunca vai para o navegador):
 Sem o DeepL, a função ainda serve os exemplos do Tatoeba e a tradução cai no
 Google automaticamente. O Tatoeba é proxyado pela função porque não tem CORS.
 
+### 🗣️ Parceiro de conversa com IA (opcional)
+
+A aba **Conversar** usa a função `converse`, que faz numa só chamada:
+voz → texto (Whisper), resposta do tutor (Claude) e texto → voz (OpenAI TTS).
+Ela se autentica pelo token do Spotify do usuário (não é um endpoint aberto).
+
+1. **Edge Functions → Create a function**, nome **`converse`**, cole
+   [`supabase/functions/converse/index.ts`](supabase/functions/converse/index.ts),
+   **Deploy** e **desligue "Verify JWT"** (a CLI já aplica via `config.toml`).
+2. Guarde as duas chaves como secrets:
+   - `supabase secrets set ANTHROPIC_API_KEY=...` (chat com Claude)
+   - `supabase secrets set OPENAI_API_KEY=...` (Whisper STT + TTS)
+   - Sem as duas, a função responde `503` e a aba mostra um aviso de "não
+     configurado" — nada quebra.
+
+### 🚀 Deploy automático das funções
+
+Com o secret de repositório **`SUPABASE_ACCESS_TOKEN`** (GitHub → Settings →
+Secrets → Actions), o workflow
+[`deploy-functions.yml`](.github/workflows/deploy-functions.yml) roda
+`supabase functions deploy` sempre que algo em `supabase/functions/**` muda —
+sem deploy manual. Sem o secret, ele é pulado sem erro.
+
 ---
 
 ## 💻 Rodando localmente

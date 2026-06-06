@@ -22,3 +22,6 @@ npm-debug.log*
 
 # TS build info
 *.tsbuildinfo
+
+# Supabase CLI local state (created by `supabase functions deploy`)
+supabase/.temp/

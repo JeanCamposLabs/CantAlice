@@ -28,7 +28,13 @@ function endpoint(): string {
 
 export class ConverseError extends Error {
   constructor(
-    public code: 'not_configured' | 'unauthorized' | 'not_allowed' | 'no_funds' | 'failed',
+    public code:
+      | 'not_configured'
+      | 'unauthorized'
+      | 'not_allowed'
+      | 'no_funds'
+      | 'timeout'
+      | 'failed',
   ) {
     super(code)
   }
@@ -40,26 +46,41 @@ export async function converse(input: {
   text?: string
   audioBase64?: string
   audioMime?: string
+  /** Ask the server to also synthesize the reply (cloud "natural" voice). */
+  wantAudio?: boolean
 }): Promise<ConverseResult> {
   const token = await getValidAccessToken()
   if (!token) throw new ConverseError('unauthorized')
 
-  const res = await fetch(endpoint(), {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'x-spotify-token': token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      scenario: input.scenario ?? null,
-      history: input.history,
-      text: input.text,
-      audio: input.audioBase64,
-      audioMime: input.audioMime,
-    }),
-  })
+  // Don't let a turn hang forever — fail fast with a clear message.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 30000)
+
+  let res: Response
+  try {
+    res = await fetch(endpoint(), {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'x-spotify-token': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        scenario: input.scenario ?? null,
+        history: input.history,
+        text: input.text,
+        audio: input.audioBase64,
+        audioMime: input.audioMime,
+        speak: input.wantAudio === true,
+      }),
+      signal: controller.signal,
+    })
+  } catch (e) {
+    throw new ConverseError((e as Error)?.name === 'AbortError' ? 'timeout' : 'failed')
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (res.status === 503) throw new ConverseError('not_configured')
   if (res.status === 401) throw new ConverseError('unauthorized')

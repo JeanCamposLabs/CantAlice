@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Loader2, Volume2, Lightbulb, Music2 } from 'lucide-react'
+import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, Sparkles } from 'lucide-react'
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
+import { speak, canSpeak } from '../lib/speak'
+import { canListen, listenOnce } from '../lib/listen'
 import {
   converse,
   blobToBase64,
   playBase64Mp3,
   ConverseError,
   IS_CONVERSE_CONFIGURED,
+  type ConverseResult,
   type Turn,
 } from '../lib/converse'
 
@@ -33,15 +36,27 @@ const KICKOFF = '(Begin: greet me in character and ask your first question.)'
 
 const NO_FUNDS_MSG =
   '⚠️ Esta função é movida por IA e os créditos da API acabaram. Fale com o Juninho o quanto antes!'
-
 const NOT_ALLOWED_MSG = 'Este recurso é exclusivo para os membros do app. 🙂'
+
+function messageFromError(e: unknown, fallback: string): string {
+  if (e instanceof ConverseError) {
+    if (e.code === 'no_funds') return NO_FUNDS_MSG
+    if (e.code === 'not_allowed') return NOT_ALLOWED_MSG
+    if (e.code === 'not_configured')
+      return 'O parceiro de conversa ainda não foi configurado pelo administrador.'
+    if (e.code === 'unauthorized') return 'Sua sessão do Spotify expirou. Reconecte para continuar.'
+    if (e.code === 'timeout') return 'A resposta demorou demais. Tente de novo.'
+  }
+  return fallback
+}
 
 export function ConversationPage() {
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
   const [messages, setMessages] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
-  const [recording, setRecording] = useState(false)
+  const [listening, setListening] = useState(false)
+  const [naturalVoice, setNaturalVoice] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -51,38 +66,33 @@ export function ConversationPage() {
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0]
 
-  // Auto-scroll to the latest message.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, busy])
 
-  const historyTurns = (): Turn[] =>
-    messages.map((m) => ({ role: m.role, content: m.content }))
+  const historyTurns = (): Turn[] => messages.map((m) => ({ role: m.role, content: m.content }))
+
+  // Speak a reply: cloud audio when "natural voice" is on, else the instant
+  // browser voice (no extra round-trip).
+  const voiceReply = (r: ConverseResult) => {
+    if (naturalVoice && r.audio) void playBase64Mp3(r.audio)
+    else if (canSpeak) speak(r.reply)
+  }
 
   const send = async (opts: { text?: string; audioBase64?: string; audioMime?: string }) => {
     setBusy(true)
     setError(null)
     const history = historyTurns()
     try {
-      const r = await converse({ scenario: scenario.context, history, ...opts })
+      const r = await converse({ scenario: scenario.context, history, wantAudio: naturalVoice, ...opts })
       setMessages((prev) => [
         ...prev,
         { role: 'user', content: r.transcript },
         { role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio },
       ])
-      if (r.audio) void playBase64Mp3(r.audio)
+      voiceReply(r)
     } catch (e) {
-      if (e instanceof ConverseError && e.code === 'no_funds') {
-        setError(NO_FUNDS_MSG)
-      } else if (e instanceof ConverseError && e.code === 'not_allowed') {
-        setError(NOT_ALLOWED_MSG)
-      } else if (e instanceof ConverseError && e.code === 'not_configured') {
-        setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
-      } else if (e instanceof ConverseError && e.code === 'unauthorized') {
-        setError('Sua sessão do Spotify expirou. Reconecte para continuar.')
-      } else {
-        setError('Algo deu errado. Tente de novo.')
-      }
+      setError(messageFromError(e, 'Algo deu errado. Tente de novo.'))
     } finally {
       setBusy(false)
     }
@@ -95,22 +105,14 @@ export function ConversationPage() {
     const ctx = SCENARIOS.find((s) => s.id === id)?.context ?? null
     setBusy(true)
     try {
-      const r = await converse({ scenario: ctx, history: [], text: KICKOFF })
+      const r = await converse({ scenario: ctx, history: [], text: KICKOFF, wantAudio: naturalVoice })
       setMessages([
         { role: 'user', content: KICKOFF, hidden: true },
         { role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio },
       ])
-      if (r.audio) void playBase64Mp3(r.audio)
+      voiceReply(r)
     } catch (e) {
-      if (e instanceof ConverseError && e.code === 'no_funds') {
-        setError(NO_FUNDS_MSG)
-      } else if (e instanceof ConverseError && e.code === 'not_allowed') {
-        setError(NOT_ALLOWED_MSG)
-      } else if (e instanceof ConverseError && e.code === 'not_configured') {
-        setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
-      } else {
-        setError('Não consegui iniciar agora. Tente de novo.')
-      }
+      setError(messageFromError(e, 'Não consegui iniciar agora. Tente de novo.'))
     } finally {
       setBusy(false)
     }
@@ -123,9 +125,26 @@ export function ConversationPage() {
     void send({ text: t })
   }
 
+  // Fast path: transcribe in the browser and send text (no upload / no Whisper).
+  const listen = async () => {
+    if (busy || listening) return
+    setError(null)
+    setListening(true)
+    try {
+      const said = await listenOnce('en-US')
+      setListening(false)
+      if (said.trim()) await send({ text: said })
+      else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
+    } catch {
+      setListening(false)
+      setError('Não consegui ouvir. Toque para tentar de novo, ou escreva abaixo.')
+    }
+  }
+
+  // Fallback for browsers without speech recognition: record and let Whisper transcribe.
   const toggleRecord = async () => {
     if (busy) return
-    if (recording) {
+    if (listening) {
       recorderRef.current?.stop()
       return
     }
@@ -136,7 +155,7 @@ export function ConversationPage() {
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data)
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop())
-        setRecording(false)
+        setListening(false)
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
         if (blob.size > 0) {
           const audioBase64 = await blobToBase64(blob)
@@ -145,12 +164,14 @@ export function ConversationPage() {
       }
       mr.start()
       recorderRef.current = mr
-      setRecording(true)
+      setListening(true)
       setError(null)
     } catch {
       setError('Não consegui acessar o microfone. Você pode digitar em vez disso.')
     }
   }
+
+  const onMic = canListen ? listen : toggleRecord
 
   // — Gates —
   if (!IS_CONVERSE_CONFIGURED) {
@@ -175,11 +196,22 @@ export function ConversationPage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] flex-col gap-4 lg:h-[calc(100dvh-3rem)]">
-      <div>
-        <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
-        <p className="mt-1 text-sm text-mist/65">
-          Fale ou escreva em inglês — o tutor responde em voz e corrige com carinho.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
+          <p className="mt-1 text-sm text-mist/65">
+            Fale ou escreva em inglês — o tutor responde e corrige com carinho.
+          </p>
+        </div>
+        <button
+          onClick={() => setNaturalVoice((v) => !v)}
+          title="Voz natural usa a IA de voz (mais bonita, porém mais lenta)"
+          className={`mt-1 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+            naturalVoice ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
+          }`}
+        >
+          <Sparkles size={13} /> Voz natural: {naturalVoice ? 'on' : 'off'}
+        </button>
       </div>
 
       {/* Scenario chips */}
@@ -225,21 +257,21 @@ export function ConversationPage() {
       {/* Composer */}
       <div className="flex items-center gap-2">
         <button
-          onClick={toggleRecord}
+          onClick={onMic}
           disabled={busy}
-          title={recording ? 'Parar e enviar' : 'Falar'}
+          title={listening ? 'Ouvindo…' : 'Falar'}
           className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${
-            recording ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
+            listening ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
           }`}
         >
-          <Mic size={20} className={recording ? 'animate-pulse' : ''} />
+          <Mic size={20} className={listening ? 'animate-pulse' : ''} />
         </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendText()}
-          placeholder={recording ? 'gravando… toque no mic para enviar' : 'ou escreva em inglês…'}
-          disabled={recording || busy}
+          placeholder={listening ? 'ouvindo… fale agora' : 'ou escreva em inglês…'}
+          disabled={listening || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"
         />
         <button
@@ -256,6 +288,10 @@ export function ConversationPage() {
 
 function Bubble({ msg }: { msg: Msg }) {
   const mine = msg.role === 'user'
+  const replay = () => {
+    if (msg.audio) void playBase64Mp3(msg.audio)
+    else if (canSpeak) speak(msg.content)
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -268,9 +304,9 @@ function Bubble({ msg }: { msg: Msg }) {
             mine ? 'bg-rose-400/20 text-cream' : 'bg-white/8 text-cream'
           }`}
         >
-          {!mine && msg.audio && (
+          {!mine && (canSpeak || msg.audio) && (
             <button
-              onClick={() => msg.audio && void playBase64Mp3(msg.audio)}
+              onClick={replay}
               title="Ouvir de novo"
               className="mt-0.5 shrink-0 text-aurora-3 hover:text-cream"
             >

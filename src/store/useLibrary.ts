@@ -351,8 +351,9 @@ export function selectDailyProgress(state: LibraryState): {
   goal: number
   met: boolean
 } {
-  const done = state.reviewedToday.date === todayKey() ? state.reviewedToday.count : 0
-  const goal = state.dailyGoal
+  const rt = state.reviewedToday ?? { date: null, count: 0 }
+  const done = rt.date === todayKey() ? rt.count : 0
+  const goal = state.dailyGoal ?? 10
   return { done, goal, met: done >= goal }
 }
 
@@ -362,11 +363,12 @@ export function selectActivity(
   days = 14,
 ): { date: string; label: string; count: number }[] {
   const out: { date: string; label: string; count: number }[] = []
+  const hist = state.history ?? {}
   const d = new Date()
   d.setDate(d.getDate() - (days - 1))
   for (let i = 0; i < days; i++) {
     const key = todayKey(d)
-    out.push({ date: key, label: String(d.getDate()), count: state.history[key] ?? 0 })
+    out.push({ date: key, label: String(d.getDate()), count: hist[key] ?? 0 })
     d.setDate(d.getDate() + 1)
   }
   return out
@@ -379,7 +381,8 @@ export function selectMasteredCount(state: LibraryState): number {
   for (const word of Object.values(state.vocab)) {
     const cards = word.srs
     if (
-      cards &&
+      cards?.fwd &&
+      cards?.rev &&
       !isNew(cards.fwd) &&
       !isNew(cards.rev) &&
       cards.fwd.stability >= MASTERED_STABILITY_DAYS &&

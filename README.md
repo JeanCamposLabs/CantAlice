@@ -181,6 +181,17 @@ Ela se autentica pelo token do Spotify do usuário (não é um endpoint aberto).
    - `supabase secrets set OPENAI_API_KEY=...` (Whisper STT + TTS)
    - Sem as duas, a função responde `503` e a aba mostra um aviso de "não
      configurado" — nada quebra.
+3. **Quem pode usar (protege seus créditos pagos):** em *Development mode* o
+   Spotify já só deixa logar quem está na lista de **User Management** do seu app
+   — ou seja, só os membros chegam até aqui. Para travar também no servidor
+   (e continuar travado se um dia for para Production), defina os IDs de usuário
+   do Spotify permitidos:
+   - `supabase secrets set ALLOWED_SPOTIFY_USERS="id1,id2,id3"`
+   - O ID do Spotify de alguém está no link do perfil: **Perfil → ⋯ →
+     Compartilhar → Copiar link**, em `open.spotify.com/user/<ID>`.
+   - Se a variável ficar vazia, qualquer usuário logado é aceito (confiando no
+     Development mode). Quem não está na lista recebe `403`.
+   - Sem créditos de IA, a aba avisa para falar com o responsável.
 
 ### 🚀 Deploy automático das funções
 

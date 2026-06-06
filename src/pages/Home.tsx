@@ -10,6 +10,8 @@ import {
   Flame,
   Brain,
   Volume2,
+  MessagesSquare,
+  ChevronRight,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
@@ -183,6 +185,24 @@ function Dashboard({ name }: { name: string }) {
           onClick={() => go('vocab')}
         />
       </div>
+
+      {/* Everyday phrases entry */}
+      <motion.button
+        whileHover={{ y: -2 }}
+        onClick={() => go('phrases')}
+        className="glass flex w-full items-center gap-4 rounded-3xl p-5 text-left"
+      >
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-aurora-2/20 text-aurora-1">
+          <MessagesSquare size={22} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-lg">Frases do dia a dia</div>
+          <div className="truncate text-sm text-mist/60">
+            Pedir um café, viajar, conversar — ouça e pratique falando.
+          </div>
+        </div>
+        <ChevronRight size={20} className="shrink-0 text-mist/40" />
+      </motion.button>
 
       {/* Word of the day */}
       {vocab.length > 0 && <WordOfDay words={vocab} />}

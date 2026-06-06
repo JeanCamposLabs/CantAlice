@@ -8,6 +8,7 @@ import {
   LogIn,
   HelpCircle,
   TrendingUp,
+  MessagesSquare,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
@@ -31,6 +32,7 @@ const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
 // five primary destinations and reaches Progresso from the home screen instead.
 const SIDEBAR_ITEMS: typeof ITEMS = [
   ...ITEMS,
+  { view: 'phrases', label: 'Frases úteis', icon: MessagesSquare },
   { view: 'progress', label: 'Progresso', icon: TrendingUp },
 ]
 

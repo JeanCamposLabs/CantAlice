@@ -117,14 +117,16 @@ const SLANG = new Set([
  * raped."), which are filtered out entirely here. Matched on word boundaries so
  * innocent substrings ("class", "assignment") are never caught.
  */
+// Focused on genuinely inappropriate content (sexual, slurs, strong profanity,
+// hard drugs, self-harm, graphic violence) — NOT everyday words an adult learner
+// legitimately needs ("beer", "wine", "die", "hate"), which we deliberately keep.
 const UNSAFE = [
-  'rape', 'raped', 'rapist', 'sex', 'sexual', 'sexy', 'porn', 'naked', 'nude', 'nudity',
-  'penis', 'vagina', 'breast', 'breasts', 'orgasm', 'condom', 'horny', 'whore', 'slut',
-  'kill', 'killed', 'killing', 'murder', 'murdered', 'suicide', 'suicidal', 'corpse',
-  'drug', 'drugs', 'cocaine', 'heroin', 'meth', 'weed', 'drunk', 'beer', 'vodka', 'whisky',
-  'fuck', 'fucked', 'fucking', 'shit', 'bitch', 'bastard', 'damn', 'hell', 'ass', 'asshole',
-  'nigger', 'fag', 'gun', 'guns', 'shot', 'shoot', 'shooting', 'bomb', 'terrorist',
-  'die', 'died', 'death', 'dead', 'blood', 'bleeding', 'hate',
+  'rape', 'raped', 'raping', 'rapist', 'sex', 'sexual', 'sexy', 'porn', 'pornography',
+  'naked', 'nude', 'nudity', 'penis', 'vagina', 'breast', 'breasts', 'orgasm', 'condom',
+  'horny', 'whore', 'slut', 'molest', 'molested', 'pedophile',
+  'fuck', 'fucked', 'fucking', 'shit', 'bitch', 'bastard', 'asshole', 'cunt', 'dick',
+  'nigger', 'faggot', 'cocaine', 'heroin', 'meth', 'overdose', 'suicide', 'suicidal',
+  'terrorist', 'behead', 'beheaded',
 ]
 const UNSAFE_RE = new RegExp(`\\b(${UNSAFE.join('|')})\\b`, 'i')
 function isAppropriate(text: string): boolean {

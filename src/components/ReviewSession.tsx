@@ -15,11 +15,22 @@ function cloze(text: string, word: string) {
   return text.replace(re, '_____')
 }
 
-const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z'-]/gi, '')
+const tokenize = (s: string): string[] => s.toLowerCase().match(/[a-z']+/g) ?? []
+
+/**
+ * Lenient answer check for the production card: the learner is "right" if what
+ * they typed/said contains the target word(s) as whole tokens — so writing or
+ * speaking the full phrase ("Stand still") counts, not just the bare word.
+ */
+function answerMatches(typed: string, target: string): boolean {
+  const said = tokenize(typed)
+  const want = tokenize(target)
+  if (!want.length || !said.length) return false
+  for (let i = 0; i + want.length <= said.length; i++) {
+    if (want.every((w, j) => said[i + j] === w)) return true
+  }
+  return false
+}
 
 const RATINGS: { rating: Rating; label: string; cls: string }[] = [
   { rating: 1, label: 'Errei', cls: 'bg-rose-500/25 text-rose-200 hover:bg-rose-500/35' },
@@ -154,7 +165,7 @@ export function ReviewSession({ onExit }: { onExit: () => void }) {
   }
 
   const reveal = () => setRevealed(true)
-  const typedCorrect = revealed && dir === 'rev' && norm(typed) === norm(word.word)
+  const typedCorrect = revealed && dir === 'rev' && answerMatches(typed, word.word)
 
   // Fetch a fresh example for this word (e.g. when the current one is an
   // obscure or awkward sentence) and replace it.

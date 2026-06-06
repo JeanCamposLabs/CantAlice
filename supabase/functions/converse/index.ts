@@ -50,6 +50,31 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin)
 }
 
+/**
+ * Throw on a failed AI response, distinguishing "out of credits/quota" (so the
+ * app can show a clear funds warning) from other errors.
+ */
+async function ensureOk(res: Response, label: string): Promise<void> {
+  if (res.ok) return
+  let body = ''
+  try {
+    body = (await res.text()).toLowerCase()
+  } catch {
+    /* ignore */
+  }
+  if (
+    res.status === 402 ||
+    res.status === 429 ||
+    body.includes('insufficient_quota') ||
+    body.includes('credit balance') ||
+    body.includes('billing') ||
+    body.includes('quota')
+  ) {
+    throw new Error('no_funds')
+  }
+  throw new Error(`${label} ${res.status}`)
+}
+
 /** Transcribe a spoken clip (English) with OpenAI Whisper. */
 async function transcribe(audioB64: string, mime: string): Promise<string> {
   const bytes = base64ToBytes(audioB64)
@@ -63,7 +88,7 @@ async function transcribe(audioB64: string, mime: string): Promise<string> {
     headers: { Authorization: `Bearer ${OPENAI_KEY}` },
     body: form,
   })
-  if (!res.ok) throw new Error(`whisper ${res.status}`)
+  await ensureOk(res, 'whisper')
   const data = (await res.json()) as { text?: string }
   return (data.text ?? '').trim()
 }
@@ -90,7 +115,7 @@ async function chat(scenario: string | null, history: Turn[], userText: string) 
     },
     body: JSON.stringify({ model: CHAT_MODEL, max_tokens: 300, system, messages }),
   })
-  if (!res.ok) throw new Error(`anthropic ${res.status}`)
+  await ensureOk(res, 'anthropic')
   const data = (await res.json()) as { content?: { text?: string }[] }
   const raw = data.content?.[0]?.text ?? ''
   // Parse the JSON object, tolerating any stray text around it.
@@ -165,6 +190,8 @@ Deno.serve(async (req: Request) => {
 
     return json({ transcript: userText, reply, tip, audio })
   } catch (e) {
-    return json({ error: String(e) }, 500)
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg === 'no_funds') return json({ error: 'no_funds' }, 402)
+    return json({ error: msg }, 500)
   }
 })

@@ -27,7 +27,7 @@ function endpoint(): string {
 }
 
 export class ConverseError extends Error {
-  constructor(public code: 'not_configured' | 'unauthorized' | 'failed') {
+  constructor(public code: 'not_configured' | 'unauthorized' | 'no_funds' | 'failed') {
     super(code)
   }
 }
@@ -61,6 +61,7 @@ export async function converse(input: {
 
   if (res.status === 503) throw new ConverseError('not_configured')
   if (res.status === 401) throw new ConverseError('unauthorized')
+  if (res.status === 402) throw new ConverseError('no_funds')
   if (!res.ok) throw new ConverseError('failed')
   return (await res.json()) as ConverseResult
 }

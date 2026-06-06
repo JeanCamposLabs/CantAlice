@@ -29,6 +29,14 @@ const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 const CHAT_MODEL = 'claude-haiku-4-5-20251001'
 
+// Optional allowlist of Spotify user IDs permitted to use this (paid) feature.
+// Comma/space/newline separated. If empty, any logged-in Spotify user is allowed
+// (in Spotify "Development mode" that's already only your User-Management list).
+const ALLOWED_USERS = (Deno.env.get('ALLOWED_SPOTIFY_USERS') ?? '')
+  .split(/[\s,]+/)
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+
 interface Turn {
   role: 'user' | 'assistant'
   content: string
@@ -164,6 +172,14 @@ Deno.serve(async (req: Request) => {
       headers: { Authorization: `Bearer ${spotifyToken}` },
     })
     if (!me.ok) return json({ error: 'invalid spotify token' }, 401)
+    // Enforce the members allowlist when configured.
+    if (ALLOWED_USERS.length) {
+      const profile = (await me.json()) as { id?: string }
+      const id = (profile.id ?? '').toLowerCase()
+      if (!id || !ALLOWED_USERS.includes(id)) {
+        return json({ error: 'not_allowed' }, 403)
+      }
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       scenario?: string | null

@@ -34,6 +34,8 @@ const KICKOFF = '(Begin: greet me in character and ask your first question.)'
 const NO_FUNDS_MSG =
   '⚠️ Esta função é movida por IA e os créditos da API acabaram. Fale com o Juninho o quanto antes!'
 
+const NOT_ALLOWED_MSG = 'Este recurso é exclusivo para os membros do app. 🙂'
+
 export function ConversationPage() {
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
@@ -72,6 +74,8 @@ export function ConversationPage() {
     } catch (e) {
       if (e instanceof ConverseError && e.code === 'no_funds') {
         setError(NO_FUNDS_MSG)
+      } else if (e instanceof ConverseError && e.code === 'not_allowed') {
+        setError(NOT_ALLOWED_MSG)
       } else if (e instanceof ConverseError && e.code === 'not_configured') {
         setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
       } else if (e instanceof ConverseError && e.code === 'unauthorized') {
@@ -100,6 +104,8 @@ export function ConversationPage() {
     } catch (e) {
       if (e instanceof ConverseError && e.code === 'no_funds') {
         setError(NO_FUNDS_MSG)
+      } else if (e instanceof ConverseError && e.code === 'not_allowed') {
+        setError(NOT_ALLOWED_MSG)
       } else if (e instanceof ConverseError && e.code === 'not_configured') {
         setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
       } else {

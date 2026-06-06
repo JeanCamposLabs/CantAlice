@@ -31,6 +31,9 @@ const SCENARIOS: { id: string; label: string; context: string | null }[] = [
 
 const KICKOFF = '(Begin: greet me in character and ask your first question.)'
 
+const NO_FUNDS_MSG =
+  '⚠️ Esta função é movida por IA e os créditos da API acabaram. Fale com o Juninho o quanto antes!'
+
 export function ConversationPage() {
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
@@ -67,7 +70,9 @@ export function ConversationPage() {
       ])
       if (r.audio) void playBase64Mp3(r.audio)
     } catch (e) {
-      if (e instanceof ConverseError && e.code === 'not_configured') {
+      if (e instanceof ConverseError && e.code === 'no_funds') {
+        setError(NO_FUNDS_MSG)
+      } else if (e instanceof ConverseError && e.code === 'not_configured') {
         setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
       } else if (e instanceof ConverseError && e.code === 'unauthorized') {
         setError('Sua sessão do Spotify expirou. Reconecte para continuar.')
@@ -93,7 +98,9 @@ export function ConversationPage() {
       ])
       if (r.audio) void playBase64Mp3(r.audio)
     } catch (e) {
-      if (e instanceof ConverseError && e.code === 'not_configured') {
+      if (e instanceof ConverseError && e.code === 'no_funds') {
+        setError(NO_FUNDS_MSG)
+      } else if (e instanceof ConverseError && e.code === 'not_configured') {
         setError('O parceiro de conversa ainda não foi configurado pelo administrador.')
       } else {
         setError('Não consegui iniciar agora. Tente de novo.')
@@ -203,7 +210,11 @@ export function ConversationPage() {
         )}
       </div>
 
-      {error && <p className="text-center text-sm text-rose-300/90">{error}</p>}
+      {error && (
+        <div className="rounded-2xl bg-rose-500/15 px-4 py-2.5 text-center text-sm font-medium text-rose-100">
+          {error}
+        </div>
+      )}
 
       {/* Composer */}
       <div className="flex items-center gap-2">

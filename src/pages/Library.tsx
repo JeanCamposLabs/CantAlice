@@ -15,14 +15,16 @@ import { useSession } from '../store/useSession'
 import { getTrack } from '../spotify/api'
 import { EmptyState } from '../components/States'
 import { formatTime } from '../lib/format'
+import { useLang } from '../lib/useLangName'
 
-const TABS: { key: SongStatus; label: string; hint: string }[] = [
-  { key: 'learning', label: 'Quero aprender', hint: 'músicas que a Alice está praticando' },
-  { key: 'known', label: 'Já sei cantar', hint: 'músicas que a Alice já domina' },
+const tabs = (learner: string): { key: SongStatus; label: string; hint: string }[] => [
+  { key: 'learning', label: 'Quero aprender', hint: `músicas que a ${learner} está praticando` },
+  { key: 'known', label: 'Já sei cantar', hint: `músicas que a ${learner} já domina` },
 ]
 
 export function LibraryPage() {
   const [tab, setTab] = useState<SongStatus>('learning')
+  const TABS = tabs(useLang().learner)
   const learning = useLibrary(useShallow((s) => selectSongs(s, 'learning')))
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const go = useNav((s) => s.go)

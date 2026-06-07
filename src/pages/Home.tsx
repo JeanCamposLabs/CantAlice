@@ -33,7 +33,7 @@ import { getTrack, type SpotifyTrack } from '../spotify/api'
 import { recommendedTracks } from '../spotify/recommend'
 import { AlbumArt } from '../components/AlbumArt'
 import { GoalRing } from '../components/GoalRing'
-import { useLangName } from '../lib/useLangName'
+import { useLang } from '../lib/useLangName'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
 import { speak, canSpeak } from '../lib/speak'
@@ -45,11 +45,12 @@ import { Brand } from '../components/Brand'
 export function HomePage() {
   const auth = useSession((s) => s.auth)
   const user = useSession((s) => s.user)
+  const learner = useLang().learner
 
   if (!IS_SPOTIFY_CONFIGURED) {
     return (
       <div className="space-y-8 pt-6">
-        <Hero name="Alice" />
+        <Hero name={learner} />
         <SetupNotice />
       </div>
     )
@@ -59,12 +60,13 @@ export function HomePage() {
     return <Welcome />
   }
 
-  return <Dashboard name={user?.displayName?.split(' ')[0] || 'Alice'} />
+  return <Dashboard name={user?.displayName?.split(' ')[0] || learner} />
 }
 
 // — Logged-out welcome (the "front door") —
 function Welcome() {
-  const langName = useLangName()
+  const lang = useLang()
+  const langName = lang.name
   return (
     <div className="flex min-h-[78vh] flex-col items-center justify-center gap-10 py-10 text-center">
       <motion.div
@@ -78,7 +80,7 @@ function Welcome() {
           Aprenda {langName} <span className="text-glow">cantando</span> as músicas que você ama.
         </h1>
         <p className="max-w-xl text-lg text-mist/75">
-          Olá, Alice! 💛 Toque suas músicas favoritas do Spotify, acompanhe a letra
+          Olá, {lang.learner}! 💛 Toque suas músicas favoritas do Spotify, acompanhe a letra
           sincronizada, veja a tradução e guarde as palavras novas — tudo num só lugar.
         </p>
         <button onClick={() => beginLogin()} className="btn-primary text-lg">
@@ -135,7 +137,9 @@ function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; 
 
 // — Logged-in dashboard —
 function Dashboard({ name }: { name: string }) {
-  const langName = useLangName()
+  const lang = useLang()
+  const langName = lang.name
+  const sampleArtists = lang.sampleArtists
   const learning = useLibrary(useShallow((s) => selectSongs(s, 'learning')))
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const vocab = useLibrary(useShallow(selectVocab))
@@ -245,7 +249,7 @@ function Dashboard({ name }: { name: string }) {
           </div>
           <h3 className="font-display text-2xl">Vamos começar?</h3>
           <p className="max-w-md text-mist/70">
-            Busque uma música em {langName} que você adora. Que tal um clássico dos Beatles ou da Adele?
+            Busque uma música em {langName} que você adora. Que tal {sampleArtists}?
           </p>
           <button onClick={() => go('search')} className="btn-primary">
             <Search size={18} /> Buscar minha primeira música

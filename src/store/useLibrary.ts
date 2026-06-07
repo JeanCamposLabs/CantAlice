@@ -236,7 +236,7 @@ export const useLibrary = create<LibraryState>()(
                 addedAt: existing?.addedAt ?? Date.now(),
                 // Never reset review progress when re-saving a word.
                 srs: existing?.srs ?? freshCards(),
-                lang: existing?.lang ?? s.targetLang,
+                lang: existing?.lang ?? (s.targetLang ?? 'en'),
               },
             },
           }
@@ -327,7 +327,14 @@ export const useLibrary = create<LibraryState>()(
       toggleLargeLyrics: () => set((s) => ({ largeLyrics: !s.largeLyrics })),
       markWordHintSeen: () => set({ wordHintSeen: true }),
     }),
-    { name: STORAGE_KEY },
+    { name: STORAGE_KEY,
+      // Existing users have persisted state from before some fields existed
+      // (e.g. targetLang). Merge over the defaults so those are never undefined.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<LibraryState>
+        return { ...current, ...p, targetLang: p.targetLang ?? current.targetLang ?? 'en' }
+      },
+    },
   ),
 )
 
@@ -340,7 +347,7 @@ export function selectSongs(state: LibraryState, status: SongStatus): SavedSong[
 
 export function selectVocab(state: LibraryState): VocabWord[] {
   return Object.values(state.vocab)
-    .filter((w) => (w.lang ?? 'en') === state.targetLang)
+    .filter((w) => (w.lang ?? 'en') === (state.targetLang ?? 'en'))
     .sort((a, b) => b.addedAt - a.addedAt)
 }
 
@@ -390,7 +397,7 @@ const MASTERED_STABILITY_DAYS = 21
 export function selectMasteredCount(state: LibraryState): number {
   let n = 0
   for (const word of Object.values(state.vocab)) {
-    if ((word.lang ?? 'en') !== state.targetLang) continue
+    if ((word.lang ?? 'en') !== (state.targetLang ?? 'en')) continue
     const cards = word.srs
     if (
       cards?.fwd &&
@@ -432,7 +439,7 @@ export function selectReviewQueue(state: LibraryState, now = Date.now()): Review
   const newFwd: ReviewItem[] = []
   const newRev: ReviewItem[] = []
   for (const [key, word] of Object.entries(state.vocab)) {
-    if ((word.lang ?? 'en') !== state.targetLang) continue
+    if ((word.lang ?? 'en') !== (state.targetLang ?? 'en')) continue
     const cards = cardsOf(word)
     for (const dir of ['fwd', 'rev'] as const) {
       const card = cards[dir]
@@ -455,7 +462,7 @@ export function selectReviewCounts(
   let due = 0
   let newAvailable = 0
   for (const word of Object.values(state.vocab)) {
-    if ((word.lang ?? 'en') !== state.targetLang) continue
+    if ((word.lang ?? 'en') !== (state.targetLang ?? 'en')) continue
     const cards = cardsOf(word)
     for (const dir of ['fwd', 'rev'] as const) {
       const card = cards[dir]

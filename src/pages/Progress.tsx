@@ -31,7 +31,8 @@ export function ProgressPage() {
   const go = useNav((s) => s.go)
 
   const maxBar = Math.max(dailyGoal, ...activity.map((a) => a.count), 1)
-  const langName = LANGUAGES[targetLang].name
+  const lang = targetLang ?? 'en'
+  const langName = (LANGUAGES[lang] ?? LANGUAGES.en).name
 
   return (
     <div className="space-y-8">
@@ -49,7 +50,7 @@ export function ProgressPage() {
               key={code}
               onClick={() => setTargetLang(code)}
               className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition-colors ${
-                targetLang === code
+                lang === code
                   ? 'bg-rose-400/25 text-rose-100'
                   : 'bg-white/8 text-mist/70 hover:bg-white/15'
               }`}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Download, Share, Plus, X, Sparkles } from 'lucide-react'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
+import { useLang } from '../lib/useLangName'
 
 const DISMISS_KEY = 'canta-alice:install-dismissed'
 
@@ -12,6 +13,7 @@ const DISMISS_KEY = 'canta-alice:install-dismissed'
  */
 export function InstallPrompt() {
   const { standalone, canPromptNative, promptInstall, ios } = useInstallPrompt()
+  const brand = useLang().brand
   const [dismissed, setDismissed] = useState(
     () => localStorage.getItem(DISMISS_KEY) === '1',
   )
@@ -60,7 +62,7 @@ export function InstallPrompt() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">Instalar o app</div>
                 <div className="text-xs text-mist/70">
-                  Tenha o Canta, Alice na tela de início, em tela cheia.
+                  Tenha o {brand} na tela de início, em tela cheia.
                 </div>
               </div>
               <button onClick={onInstall} className="btn-primary shrink-0 px-4 py-2 text-sm">

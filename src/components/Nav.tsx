@@ -20,6 +20,7 @@ import { useLibrary, selectReviewCounts } from '../store/useLibrary'
 import { Brand } from './Brand'
 import { beginLogin, logout } from '../spotify/auth'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
+import { useLang } from '../lib/useLangName'
 
 const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
   { view: 'home', label: 'Início', icon: Home },
@@ -29,13 +30,19 @@ const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
   { view: 'translate', label: 'Tradutor', icon: Languages },
 ]
 
-// The desktop sidebar has room for Progresso; the mobile bottom bar keeps the
-// five primary destinations and reaches Progresso from the home screen instead.
+// The desktop sidebar has room for everything; the mobile bottom bar keeps the
+// most-used destinations (and reaches Progresso/Frases from the home screen).
 const SIDEBAR_ITEMS: typeof ITEMS = [
   ...ITEMS,
   { view: 'conversar', label: 'Conversar', icon: Sparkles },
   { view: 'phrases', label: 'Frases úteis', icon: MessagesSquare },
   { view: 'progress', label: 'Progresso', icon: TrendingUp },
+]
+
+// Mobile bottom bar: the primary destinations plus the AI conversation partner.
+const MOBILE_ITEMS: typeof ITEMS = [
+  ...ITEMS,
+  { view: 'conversar', label: 'Conversar', icon: Sparkles },
 ]
 
 function NavButton({
@@ -58,7 +65,7 @@ function NavButton({
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={`group relative flex items-center gap-3 rounded-2xl font-medium transition-colors ${
-        vertical ? 'px-4 py-3 w-full' : 'flex-col gap-1 px-3 py-2 text-[0.66rem]'
+        vertical ? 'px-4 py-3 w-full' : 'flex-col gap-1 px-1.5 py-2 text-[0.62rem]'
       } ${active ? 'text-cream' : 'text-mist/70 hover:text-cream'}`}
     >
       {active && (
@@ -161,6 +168,7 @@ function AccountControl({ vertical, compact }: { vertical?: boolean; compact?: b
 
 export function Sidebar() {
   const { view, go } = useNav()
+  const lang = useLang()
   const reviewCount = useLibrary(useShallow((s) => selectReviewCounts(s).total))
   return (
     <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 flex-col gap-2 border-r border-white/5 px-5 py-7 lg:flex">
@@ -189,7 +197,7 @@ export function Sidebar() {
         </button>
         <AccountControl vertical />
         <p className="mt-4 px-3 text-[0.68rem] leading-relaxed text-mist/40">
-          Feito com carinho para a Alice aprender inglês cantando. 🎶
+          Feito com carinho para a {lang.learner} aprender {lang.name} cantando. 🎶
         </p>
       </div>
     </aside>
@@ -202,7 +210,7 @@ export function MobileBar() {
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <div className="glass-strong mx-3 mb-3 flex items-center justify-around rounded-3xl px-2 py-1.5">
-        {ITEMS.map((item) => (
+        {MOBILE_ITEMS.map((item) => (
           <NavButton
             key={item.view}
             {...item}

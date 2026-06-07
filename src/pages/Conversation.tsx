@@ -5,7 +5,7 @@ import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
-import { useLangName } from '../lib/useLangName'
+import { useLang } from '../lib/useLangName'
 import {
   converse,
   blobToBase64,
@@ -52,7 +52,8 @@ function messageFromError(e: unknown, fallback: string): string {
 }
 
 export function ConversationPage() {
-  const langName = useLangName()
+  const lang = useLang()
+  const langName = lang.name
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
   const [messages, setMessages] = useState<Msg[]>([])
@@ -241,7 +242,7 @@ export function ConversationPage() {
         {visible.length === 0 && !busy && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-mist/50">
             <Mic size={28} />
-            <p>Escolha uma situação acima, ou toque no microfone e diga “Hi!”.</p>
+            <p>Escolha uma situação acima, ou toque no microfone e diga “{lang.hello}”.</p>
           </div>
         )}
         {visible.map((m, i) => (

@@ -8,6 +8,7 @@ import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
 import { SpeakableText } from './SpeakableText'
 import { useUI } from '../store/useUI'
+import { useLangName } from '../lib/useLangName'
 
 /** Blank out the target word in an example so it can be produced from context. */
 function cloze(text: string, word: string) {
@@ -389,6 +390,7 @@ function RevCard({
   typedCorrect: boolean
   onEnter: () => void
 }) {
+  const langName = useLangName()
   const en = word.example?.text
   const pt = word.example?.translation
   return (
@@ -424,7 +426,7 @@ function RevCard({
             />
           </div>
           <span className="text-sm text-mist/45">
-            {en ? 'Complete a frase em inglês' : 'Como se diz em inglês?'}
+            {en ? `Complete a frase em ${langName}` : `Como se diz em ${langName}?`}
             {canListen && ' — ou toque no microfone e fale'}
           </span>
         </>

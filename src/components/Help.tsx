@@ -15,12 +15,13 @@ import { useSession } from '../store/useSession'
 import { applyUpdate } from '../hooks/useAppUpdate'
 import { beginLogin, logout } from '../spotify/auth'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
+import { useLang } from '../lib/useLangName'
 
-const TIPS = [
+const tips = (langName: string) => [
   {
     icon: Search,
     title: 'Busque e toque',
-    text: 'Procure qualquer música em inglês e toque nela para abrir o modo de cantar.',
+    text: `Procure qualquer música em ${langName} e toque nela para abrir o modo de cantar.`,
   },
   {
     icon: MicVocal,
@@ -35,7 +36,7 @@ const TIPS = [
   {
     icon: Brain,
     title: 'Revise na hora certa',
-    text: 'Cada palavra guardada vira cartões (inglês↔português, com a frase). O app usa repetição espaçada (FSRS) e mostra na aba Vocabulário quantos estão prontos para revisar.',
+    text: `Cada palavra guardada vira cartões (${langName}↔português, com a frase). O app usa repetição espaçada (FSRS) e mostra na aba Vocabulário quantos estão prontos para revisar.`,
   },
 ]
 
@@ -44,6 +45,7 @@ export function Help() {
   const close = useUI((s) => s.closeHelp)
   const auth = useSession((s) => s.auth)
   const isPremium = useSession((s) => s.isPremium)
+  const lang = useLang()
 
   const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
@@ -68,7 +70,7 @@ export function Help() {
             className="glass-strong pb-safe relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl p-6 sm:rounded-3xl sm:p-8"
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-display text-2xl">Como usar o Canta, Alice</h2>
+              <h2 className="font-display text-2xl">Como usar o {lang.brand}</h2>
               <button
                 onClick={close}
                 className="rounded-full p-2 text-mist/60 transition-colors hover:bg-white/10 hover:text-cream"
@@ -79,7 +81,7 @@ export function Help() {
             </div>
 
             <div className="space-y-3">
-              {TIPS.map((t) => (
+              {tips(lang.name).map((t) => (
                 <div key={t.title} className="flex gap-3 rounded-2xl bg-white/5 p-3">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rose-400/15 text-rose-300">
                     <t.icon size={20} />
@@ -127,7 +129,7 @@ export function Help() {
             </div>
 
             <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-mist/40">
-              <Heart size={12} className="text-rose-400" /> Feito com carinho para a Alice · versão{' '}
+              <Heart size={12} className="text-rose-400" /> Feito com carinho para a {lang.learner} · versão{' '}
               <code>{version}</code>
             </p>
           </motion.div>

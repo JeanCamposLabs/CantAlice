@@ -86,6 +86,12 @@ export interface LangConfig {
   myMemory: string
   /** English name of the language, for AI prompts. */
   englishName: string
+  /** A sample greeting in the target language, for UI hints ("Hi!" / "¡Hola!"). */
+  hello: string
+  /** The learner this edition is made for, used in UI copy. */
+  learner: string
+  /** Example artists in the target language, for the "search a song" hint. */
+  sampleArtists: string
 }
 
 export const LANGUAGES: Record<TargetLang, LangConfig> = {
@@ -101,6 +107,9 @@ export const LANGUAGES: Record<TargetLang, LangConfig> = {
     google: 'en',
     myMemory: 'en',
     englishName: 'English',
+    hello: 'Hi!',
+    learner: 'Alice',
+    sampleArtists: 'um clássico dos Beatles ou da Adele',
   },
   es: {
     code: 'es',
@@ -114,6 +123,9 @@ export const LANGUAGES: Record<TargetLang, LangConfig> = {
     google: 'es',
     myMemory: 'es',
     englishName: 'Spanish (Castilian, from Spain)',
+    hello: '¡Hola!',
+    learner: 'Lohanne',
+    sampleArtists: 'um sucesso da Shakira ou do Bad Bunny',
   },
 }
 

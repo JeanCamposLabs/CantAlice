@@ -5,12 +5,15 @@ import { useShallow } from 'zustand/react/shallow'
 import { translate } from '../lyrics/translate'
 import { fetchExamples, type Example } from '../lyrics/examples'
 import { lookupIdiom } from '../lyrics/idioms'
+import { useLangName } from '../lib/useLangName'
 import { useLibrary, selectWord } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
 
 export function TranslatePage() {
+  const langName = useLangName()
+  const langLabel = langName.charAt(0).toUpperCase() + langName.slice(1)
   const [query, setQuery] = useState('')
   const [term, setTerm] = useState('')
   const [translation, setTranslation] = useState<string | null>(null)
@@ -56,7 +59,7 @@ export function TranslatePage() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="palavra ou frase em inglês…"
+            placeholder={`palavra ou frase em ${langName}…`}
             className="w-full bg-transparent py-3 text-lg outline-none placeholder:text-mist/40"
           />
         </div>
@@ -78,7 +81,7 @@ export function TranslatePage() {
             <div className="glass-strong rounded-3xl p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-[0.18em] text-mist/45">Inglês</div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-mist/45">{langLabel}</div>
                   <div className="flex items-center gap-2">
                     <span className="font-display text-3xl text-cream">{term}</span>
                     {canSpeak && (

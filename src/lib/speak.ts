@@ -1,23 +1,27 @@
+import { langConfig } from './lang'
+
 /**
- * Speak a short English phrase aloud using the browser's Speech Synthesis.
- * Used to hear the pronunciation of saved words. Must be called from a user
- * gesture on iOS. No-ops gracefully where unsupported.
+ * Speak a short phrase aloud using the browser's Speech Synthesis, in the
+ * user's target language (English/Spanish) by default. Must be called from a
+ * user gesture on iOS. No-ops gracefully where unsupported.
  */
-export function speak(text: string, lang = 'en-US'): void {
+export function speak(text: string, lang?: string): void {
   const clean = text.trim()
   if (!clean) return
   const synth = window.speechSynthesis
   if (!synth) return
+  const locale = lang ?? langConfig().speech
   try {
     synth.cancel() // stop anything already speaking
     const utter = new SpeechSynthesisUtterance(clean)
-    utter.lang = lang
+    utter.lang = locale
     utter.rate = 0.92
     utter.pitch = 1
-    // Prefer an English voice when one is available.
+    // Prefer a voice matching the target language when one is available.
+    const prefix = locale.slice(0, 2).toLowerCase()
     const voices = synth.getVoices()
-    const en = voices.find((v) => v.lang?.toLowerCase().startsWith('en'))
-    if (en) utter.voice = en
+    const match = voices.find((v) => v.lang?.toLowerCase().startsWith(prefix))
+    if (match) utter.voice = match
     synth.speak(utter)
   } catch {
     /* unsupported — ignore */

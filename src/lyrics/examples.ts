@@ -9,6 +9,7 @@
  */
 import { translate } from './translate'
 import { backendExamples, IS_TRANSLATE_BACKEND } from './backend'
+import { activeLang } from '../lib/lang'
 
 const WIKTIONARY = 'https://en.wiktionary.org/api/rest_v1/page/definition'
 const DICT_BASE = 'https://api.dictionaryapi.dev/api/v2/entries/en'
@@ -121,6 +122,10 @@ export async function fetchExamples(query: string, limit = 6): Promise<Example[]
     const bi = await backendExamples(q, limit)
     if (bi.length) return dedupe(bi.map((b) => ({ ...b, source: 'tatoeba' as const })))
   }
+
+  // The Wiktionary/Dictionary fallback is English-only; for other target
+  // languages we rely on the backend (Tatoeba + generated examples).
+  if (activeLang() !== 'en') return []
 
   const [wikt, dict] = await Promise.all([wiktionaryExamples(q), dictionaryExamples(q)])
   const ranked = rankSentences(wikt.length ? wikt : dict, q).slice(0, limit)

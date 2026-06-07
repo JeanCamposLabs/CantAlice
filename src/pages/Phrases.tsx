@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Volume2, Copy, Check, MessagesSquare } from 'lucide-react'
-import { PHRASEBOOK, type Scenario, type Phrase, type DialogLine } from '../content/phrasebook'
+import { PHRASEBOOKS, type Scenario, type Phrase, type DialogLine } from '../content/phrasebook'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
 import { speak, canSpeak } from '../lib/speak'
+import { useLibrary } from '../store/useLibrary'
 
 export function PhrasesPage() {
-  const [open, setOpen] = useState<string | null>(PHRASEBOOK[0]?.id ?? null)
+  const targetLang = useLibrary((s) => s.targetLang)
+  const phrasebook = PHRASEBOOKS[targetLang] ?? PHRASEBOOKS.en
+  const [open, setOpen] = useState<string | null>(phrasebook[0]?.id ?? null)
 
   return (
     <div className="space-y-8">
@@ -21,7 +24,7 @@ export function PhrasesPage() {
       </div>
 
       <div className="space-y-3">
-        {PHRASEBOOK.map((s) => (
+        {phrasebook.map((s) => (
           <ScenarioCard
             key={s.id}
             scenario={s}

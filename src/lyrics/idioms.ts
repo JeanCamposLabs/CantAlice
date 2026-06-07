@@ -1,10 +1,13 @@
 /**
- * A small curated map of common English idioms → their real (figurative)
- * meaning in Portuguese. DeepL/Google translate these literally ("break a leg"
- * → "quebrar uma perna"), which is confusing for a learner, so the Tradutor
- * shows this note when the search matches a known expression.
+ * Curated maps of common idioms → their real (figurative) meaning in
+ * Portuguese, per target language. DeepL/Google translate these literally
+ * ("break a leg" → "quebrar uma perna"), which is confusing for a learner, so
+ * the Tradutor shows this note when the search matches a known expression.
  */
-const IDIOMS: Record<string, string> = {
+import type { TargetLang } from '../config'
+import { activeLang } from '../lib/lang'
+
+const EN_IDIOMS: Record<string, string> = {
   'break a leg': 'Boa sorte! (deseja-se sucesso, geralmente antes de uma apresentação)',
   'piece of cake': 'Muito fácil; moleza.',
   'hit the road': 'Ir embora; cair na estrada.',
@@ -38,12 +41,41 @@ const IDIOMS: Record<string, string> = {
   'kill two birds with one stone': 'Matar dois coelhos com uma cajadada só.',
 }
 
+// Common Spanish (Castilian) idioms → pt-BR meaning.
+const ES_IDIOMS: Record<string, string> = {
+  'estar en las nubes': 'Estar distraído, viajando na maionese.',
+  'ser pan comido': 'Ser muito fácil; moleza.',
+  'costar un ojo de la cara': 'Custar caríssimo; custar os olhos da cara.',
+  'tomar el pelo': 'Zoar / pegar no pé de alguém.',
+  'meter la pata': 'Cometer uma gafe; pisar na bola.',
+  'no tener pelos en la lengua': 'Não ter papas na língua; falar sem rodeios.',
+  'estar como una cabra': 'Estar maluco; ser doidinho.',
+  'echar una mano': 'Dar uma ajuda; dar uma mãozinha.',
+  'ponerse las pilas': 'Se ligar; correr atrás; se esforçar.',
+  'dar en el clavo': 'Acertar em cheio.',
+  'irse por las ramas': 'Enrolar; fugir do assunto.',
+  'matar dos pájaros de un tiro': 'Matar dois coelhos com uma cajadada só.',
+  'a buenas horas': 'Tarde demais; agora que adianta?',
+  'estar hecho polvo': 'Estar exausto; estar acabado.',
+  'buena onda': 'Gente boa; simpático.',
+  'vale': 'Tá bom / beleza / combinado.',
+  'qué guay': 'Que legal / que maneiro.',
+  'tirar la toalla': 'Jogar a toalha; desistir.',
+  'hacerse la boca agua': 'Dar água na boca.',
+  'no pegar ojo': 'Não pregar o olho; não dormir nada.',
+}
+
+const IDIOMS_BY_LANG: Record<TargetLang, Record<string, string>> = {
+  en: EN_IDIOMS,
+  es: ES_IDIOMS,
+}
+
 /** Look up a phrase's idiomatic meaning, ignoring case/punctuation. Null if none. */
 export function lookupIdiom(phrase: string): string | null {
   const key = phrase
     .toLowerCase()
     .trim()
-    .replace(/[.!?,;:"]/g, '')
+    .replace(/[.!?,;:"¡¿]/g, '')
     .replace(/\s+/g, ' ')
-  return IDIOMS[key] ?? null
+  return IDIOMS_BY_LANG[activeLang()][key] ?? null
 }

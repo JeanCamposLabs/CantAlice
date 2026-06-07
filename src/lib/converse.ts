@@ -6,6 +6,7 @@
  */
 import { SUPABASE_URL, SUPABASE_ANON_KEY, IS_CLOUD_CONFIGURED } from '../config'
 import { getValidAccessToken } from '../spotify/auth'
+import { activeLang } from './lang'
 
 export interface Turn {
   role: 'user' | 'assistant'
@@ -73,6 +74,7 @@ export async function converse(input: {
         audio: input.audioBase64,
         audioMime: input.audioMime,
         speak: input.wantAudio === true,
+        lang: activeLang(),
       }),
       signal: controller.signal,
     })

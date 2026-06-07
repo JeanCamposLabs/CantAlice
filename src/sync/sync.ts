@@ -10,6 +10,7 @@
  */
 import { useEffect } from 'react'
 import { useLibrary, type SavedSong, type VocabWord } from '../store/useLibrary'
+import type { TargetLang } from '../config'
 import { useSession } from '../store/useSession'
 import { getValidAccessToken } from '../spotify/auth'
 import { IS_CLOUD_CONFIGURED } from '../config'
@@ -24,6 +25,7 @@ export interface Snapshot {
   dailyGoal: number
   reviewedToday: { date: string | null; count: number }
   history: Record<string, number>
+  targetLang: TargetLang
   showTranslations: boolean
   largeLyrics: boolean
   wordHintSeen: boolean
@@ -42,6 +44,7 @@ function getSnapshot(): Snapshot {
     dailyGoal: s.dailyGoal,
     reviewedToday: s.reviewedToday,
     history: s.history,
+    targetLang: s.targetLang,
     showTranslations: s.showTranslations,
     largeLyrics: s.largeLyrics,
     wordHintSeen: s.wordHintSeen,
@@ -60,6 +63,7 @@ function applySnapshot(snap: Snapshot): void {
     dailyGoal: snap.dailyGoal ?? 10,
     reviewedToday: snap.reviewedToday ?? { date: null, count: 0 },
     history: snap.history ?? {},
+    targetLang: snap.targetLang ?? 'en',
     showTranslations: snap.showTranslations,
     largeLyrics: snap.largeLyrics,
     wordHintSeen: snap.wordHintSeen,
@@ -134,6 +138,7 @@ export function mergeSnapshots(local: Snapshot, cloud: Snapshot | null): Snapsho
     dailyGoal: newer.dailyGoal ?? 10,
     reviewedToday,
     history,
+    targetLang: newer.targetLang ?? 'en',
     showTranslations: newer.showTranslations,
     largeLyrics: newer.largeLyrics,
     wordHintSeen: local.wordHintSeen || cloud.wordHintSeen,

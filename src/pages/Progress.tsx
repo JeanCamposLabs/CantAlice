@@ -13,6 +13,7 @@ import {
 import { useNav } from '../store/useNav'
 import { GoalRing } from '../components/GoalRing'
 import { plural } from '../lib/format'
+import { LANGUAGES, type TargetLang } from '../config'
 
 export function ProgressPage() {
   const streak = useLibrary(currentStreak)
@@ -25,15 +26,41 @@ export function ProgressPage() {
   const setDailyGoal = useLibrary((s) => s.setDailyGoal)
   const dailyNewLimit = useLibrary((s) => s.dailyNewLimit)
   const setDailyNewLimit = useLibrary((s) => s.setDailyNewLimit)
+  const targetLang = useLibrary((s) => s.targetLang)
+  const setTargetLang = useLibrary((s) => s.setTargetLang)
   const go = useNav((s) => s.go)
 
   const maxBar = Math.max(dailyGoal, ...activity.map((a) => a.count), 1)
+  const langName = LANGUAGES[targetLang].name
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-4xl sm:text-5xl">Seu progresso</h1>
-        <p className="mt-2 text-mist/70">Cada dia de prática deixa o inglês mais natural. 💛</p>
+        <p className="mt-2 text-mist/70">Cada dia de prática deixa o {langName} mais natural. 💛</p>
+      </div>
+
+      {/* Language being learned */}
+      <div className="glass rounded-3xl p-5">
+        <div className="text-xs uppercase tracking-[0.18em] text-mist/45">Idioma que estou aprendendo</div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(Object.keys(LANGUAGES) as TargetLang[]).map((code) => (
+            <button
+              key={code}
+              onClick={() => setTargetLang(code)}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition-colors ${
+                targetLang === code
+                  ? 'bg-rose-400/25 text-rose-100'
+                  : 'bg-white/8 text-mist/70 hover:bg-white/15'
+              }`}
+            >
+              {LANGUAGES[code].name}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-mist/45">
+          Seu vocabulário e progresso são separados por idioma.
+        </p>
       </div>
 
       {/* Goal + streak + editable target */}

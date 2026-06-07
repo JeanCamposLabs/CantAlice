@@ -33,6 +33,7 @@ import { getTrack, type SpotifyTrack } from '../spotify/api'
 import { recommendedTracks } from '../spotify/recommend'
 import { AlbumArt } from '../components/AlbumArt'
 import { GoalRing } from '../components/GoalRing'
+import { useLangName } from '../lib/useLangName'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
 import { speak, canSpeak } from '../lib/speak'
@@ -63,6 +64,7 @@ export function HomePage() {
 
 // — Logged-out welcome (the "front door") —
 function Welcome() {
+  const langName = useLangName()
   return (
     <div className="flex min-h-[78vh] flex-col items-center justify-center gap-10 py-10 text-center">
       <motion.div
@@ -73,7 +75,7 @@ function Welcome() {
       >
         <Brand />
         <h1 className="max-w-3xl font-display text-5xl leading-[1.05] sm:text-7xl">
-          Aprenda inglês <span className="text-glow">cantando</span> as músicas que você ama.
+          Aprenda {langName} <span className="text-glow">cantando</span> as músicas que você ama.
         </h1>
         <p className="max-w-xl text-lg text-mist/75">
           Olá, Alice! 💛 Toque suas músicas favoritas do Spotify, acompanhe a letra
@@ -133,6 +135,7 @@ function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; 
 
 // — Logged-in dashboard —
 function Dashboard({ name }: { name: string }) {
+  const langName = useLangName()
   const learning = useLibrary(useShallow((s) => selectSongs(s, 'learning')))
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))
   const vocab = useLibrary(useShallow(selectVocab))
@@ -198,7 +201,7 @@ function Dashboard({ name }: { name: string }) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="font-display text-lg">Conversar com IA</div>
-            <div className="truncate text-sm text-mist/60">Fale em inglês e receba resposta em voz.</div>
+            <div className="truncate text-sm text-mist/60">Fale em {langName} e receba resposta em voz.</div>
           </div>
           <ChevronRight size={20} className="shrink-0 text-mist/40" />
         </motion.button>
@@ -242,7 +245,7 @@ function Dashboard({ name }: { name: string }) {
           </div>
           <h3 className="font-display text-2xl">Vamos começar?</h3>
           <p className="max-w-md text-mist/70">
-            Busque uma música em inglês que você adora. Que tal um clássico dos Beatles ou da Adele?
+            Busque uma música em {langName} que você adora. Que tal um clássico dos Beatles ou da Adele?
           </p>
           <button onClick={() => go('search')} className="btn-primary">
             <Search size={18} /> Buscar minha primeira música

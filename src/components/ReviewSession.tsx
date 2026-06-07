@@ -290,7 +290,7 @@ function MicAnswerButton({ onResult }: { onResult: (text: string) => void }) {
   const run = async () => {
     setListening(true)
     try {
-      const said = await listenOnce('en-US')
+      const said = await listenOnce()
       if (said) onResult(said)
     } catch {
       /* permission denied / nothing heard — ignore, she can type */

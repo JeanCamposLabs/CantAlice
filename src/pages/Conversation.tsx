@@ -5,6 +5,7 @@ import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
+import { useLangName } from '../lib/useLangName'
 import {
   converse,
   blobToBase64,
@@ -51,6 +52,7 @@ function messageFromError(e: unknown, fallback: string): string {
 }
 
 export function ConversationPage() {
+  const langName = useLangName()
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
   const [messages, setMessages] = useState<Msg[]>([])
@@ -146,7 +148,7 @@ export function ConversationPage() {
     setError(null)
     setListening(true)
     try {
-      const said = await listenOnce('en-US')
+      const said = await listenOnce()
       setListening(false)
       if (said.trim()) await send({ text: said, display: said })
       else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
@@ -214,7 +216,7 @@ export function ConversationPage() {
       <div>
         <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
         <p className="mt-1 text-sm text-mist/65">
-          Fale ou escreva em inglês — o tutor responde em voz e corrige com carinho.
+          Fale ou escreva em {langName} — o tutor responde em voz e corrige com carinho.
         </p>
       </div>
 
@@ -274,7 +276,7 @@ export function ConversationPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendText()}
-          placeholder={listening ? 'ouvindo… fale agora' : 'ou escreva em inglês…'}
+          placeholder={listening ? 'ouvindo… fale agora' : `ou escreva em ${langName}…`}
           disabled={listening || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"
         />

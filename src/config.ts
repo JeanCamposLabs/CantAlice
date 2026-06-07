@@ -57,6 +57,67 @@ export const IS_CLOUD_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 export const APP_NAME = 'Canta, Alice'
 
 /**
+ * Target language — the language the user is learning. Portuguese (pt-BR) stays
+ * the base/UI language. Each user picks one; English is the default so existing
+ * users are unaffected.
+ */
+export type TargetLang = 'en' | 'es'
+export const DEFAULT_LANG: TargetLang = 'en'
+
+export interface LangConfig {
+  code: TargetLang
+  /** pt-BR name of the language, for UI copy ("inglês" / "espanhol"). */
+  name: string
+  /** Brand wordmark shown in the app. */
+  brand: string
+  /** Short tagline under the brand. */
+  tagline: string
+  /** BCP-47 locale for browser TTS + speech recognition. */
+  speech: string
+  /** DeepL source language code. */
+  deepl: string
+  /** Tatoeba ISO-639-3 code. */
+  tatoeba: string
+  /** OpenAI Whisper language code. */
+  whisper: string
+  /** Google Translate source code. */
+  google: string
+  /** MyMemory source code (paired with pt-BR). */
+  myMemory: string
+  /** English name of the language, for AI prompts. */
+  englishName: string
+}
+
+export const LANGUAGES: Record<TargetLang, LangConfig> = {
+  en: {
+    code: 'en',
+    name: 'inglês',
+    brand: 'Canta, Alice',
+    tagline: 'Inglês cantando',
+    speech: 'en-US',
+    deepl: 'EN',
+    tatoeba: 'eng',
+    whisper: 'en',
+    google: 'en',
+    myMemory: 'en',
+    englishName: 'English',
+  },
+  es: {
+    code: 'es',
+    name: 'espanhol',
+    brand: 'Canta, Lohanne',
+    tagline: 'Espanhol cantando',
+    speech: 'es-ES',
+    deepl: 'ES',
+    tatoeba: 'spa',
+    whisper: 'es',
+    google: 'es',
+    myMemory: 'es',
+    englishName: 'Spanish (Castilian, from Spain)',
+  },
+}
+
+/**
  * Owner contact, used by the in-app "Pedir acesso" (request access) flow so a
  * blocked user can send you their Spotify email to be added to the app's
  * allow-list. All optional — set via env (VITE_OWNER_EMAIL / VITE_OWNER_WHATSAPP)

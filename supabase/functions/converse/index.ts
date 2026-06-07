@@ -29,6 +29,12 @@ const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 const CHAT_MODEL = 'claude-haiku-4-5-20251001'
 
+// Target language → Whisper code + name used in the tutor prompt. Base is pt-BR.
+const LANGS: Record<string, { whisper: string; name: string }> = {
+  en: { whisper: 'en', name: 'English' },
+  es: { whisper: 'es', name: 'Spanish (Castilian, from Spain)' },
+}
+
 // Optional allowlist of Spotify user IDs permitted to use this (paid) feature.
 // Comma/space/newline separated. If empty, any logged-in Spotify user is allowed
 // (in Spotify "Development mode" that's already only your User-Management list).
@@ -83,14 +89,14 @@ async function ensureOk(res: Response, label: string): Promise<void> {
   throw new Error(`${label} ${res.status}`)
 }
 
-/** Transcribe a spoken clip (English) with OpenAI Whisper. */
-async function transcribe(audioB64: string, mime: string): Promise<string> {
+/** Transcribe a spoken clip in the target language with OpenAI Whisper. */
+async function transcribe(audioB64: string, mime: string, whisperLang = 'en'): Promise<string> {
   const bytes = base64ToBytes(audioB64)
   const ext = mime.includes('mp4') ? 'mp4' : mime.includes('ogg') ? 'ogg' : 'webm'
   const form = new FormData()
   form.append('file', new File([bytes], `clip.${ext}`, { type: mime || 'audio/webm' }))
   form.append('model', 'whisper-1')
-  form.append('language', 'en')
+  form.append('language', whisperLang)
   const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENAI_KEY}` },
@@ -102,14 +108,21 @@ async function transcribe(audioB64: string, mime: string): Promise<string> {
 }
 
 /** Get the tutor's reply (+ optional pt-BR correction) from Claude. */
-async function chat(scenario: string | null, history: Turn[], userText: string) {
+async function chat(
+  scenario: string | null,
+  history: Turn[],
+  userText: string,
+  languageName = 'English',
+) {
   const system =
-    `You are a warm, patient English conversation partner for a Brazilian Portuguese ` +
-    `speaker practising everyday spoken English (easy–intermediate level).` +
+    `You are a warm, patient ${languageName} conversation partner for a Brazilian ` +
+    `Portuguese speaker practising everyday spoken ${languageName} (easy–intermediate ` +
+    `level).` +
     (scenario ? ` Role-play this situation: ${scenario}.` : ' Have a friendly free chat.') +
-    ` Rules: reply ONLY in English; keep it to 1–2 short, natural sentences; always end ` +
-    `with a simple question to keep the conversation going. If the learner's last message ` +
-    `had a noticeable English mistake, briefly note the correction in Brazilian Portuguese.` +
+    ` Rules: reply ONLY in ${languageName}; keep it to 1–2 short, natural sentences; ` +
+    `always end with a simple question to keep the conversation going. If the learner's ` +
+    `last message had a noticeable ${languageName} mistake, briefly note the correction ` +
+    `in Brazilian Portuguese.` +
     ` Respond as strict JSON: {"reply": string, "tip": string}. "tip" is the pt-BR ` +
     `correction or "" if there was nothing worth correcting. No markdown, JSON only.`
 
@@ -189,17 +202,19 @@ Deno.serve(async (req: Request) => {
       audioMime?: string
       voice?: string
       speak?: boolean
+      lang?: string
     }
+    const cfg = LANGS[(body.lang as string) in LANGS ? (body.lang as string) : 'en']
 
     // 1) Resolve the user's utterance (speech or typed text).
     let userText = (body.text ?? '').trim()
     if (!userText && body.audio) {
-      userText = await transcribe(body.audio, body.audioMime ?? 'audio/webm')
+      userText = await transcribe(body.audio, body.audioMime ?? 'audio/webm', cfg.whisper)
     }
     if (!userText) return json({ error: 'empty input' }, 400)
 
     // 2) Tutor reply.
-    const { reply, tip } = await chat(body.scenario ?? null, body.history ?? [], userText)
+    const { reply, tip } = await chat(body.scenario ?? null, body.history ?? [], userText, cfg.name)
 
     // 3) Voice the reply (unless the client opted out).
     const audio = body.speak === false ? null : await speak(reply, body.voice ?? 'nova')

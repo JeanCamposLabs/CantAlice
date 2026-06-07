@@ -1,6 +1,11 @@
 import { Music4 } from 'lucide-react'
+import { useLibrary } from '../store/useLibrary'
+import { LANGUAGES } from '../config'
 
 export function Brand({ compact = false }: { compact?: boolean }) {
+  const lang = useLibrary((s) => s.targetLang)
+  const cfg = LANGUAGES[lang] ?? LANGUAGES.en
+  const [head, ...rest] = cfg.brand.split(',')
   return (
     <div className="flex items-center gap-3 select-none">
       <span
@@ -16,11 +21,11 @@ export function Brand({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="leading-none">
           <div className="font-display text-2xl tracking-tight">
-            <span className="text-glow">Canta</span>
-            <span className="text-cream/90">, Alice</span>
+            <span className="text-glow">{head}</span>
+            <span className="text-cream/90">{rest.length ? ',' + rest.join(',') : ''}</span>
           </div>
           <div className="mt-1 text-[0.7rem] uppercase tracking-[0.22em] text-mist/70">
-            Inglês cantando
+            {cfg.tagline}
           </div>
         </div>
       )}

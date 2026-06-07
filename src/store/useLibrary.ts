@@ -380,8 +380,20 @@ export function selectActivity(
   state: LibraryState,
   days = 14,
 ): { date: string; label: string; count: number }[] {
+  return buildActivity(state.history ?? {}, days)
+}
+
+/**
+ * Pure builder for the activity chart. Kept separate from the selector so
+ * callers can memoize on the stable `history` reference — selecting the freshly
+ * built array directly would return a new reference every render and, under
+ * useSyncExternalStore, loop ("getSnapshot should be cached").
+ */
+export function buildActivity(
+  hist: Record<string, number>,
+  days = 14,
+): { date: string; label: string; count: number }[] {
   const out: { date: string; label: string; count: number }[] = []
-  const hist = state.history ?? {}
   const d = new Date()
   d.setDate(d.getDate() - (days - 1))
   for (let i = 0; i < days; i++) {

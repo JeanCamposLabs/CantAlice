@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { Flame, BookHeart, Trophy, Music2, Brain, Minus, Plus } from 'lucide-react'
@@ -5,7 +6,7 @@ import {
   useLibrary,
   currentStreak,
   selectDailyProgress,
-  selectActivity,
+  buildActivity,
   selectMasteredCount,
   selectVocab,
   selectSongs,
@@ -18,7 +19,8 @@ import { LANGUAGES, type TargetLang } from '../config'
 export function ProgressPage() {
   const streak = useLibrary(currentStreak)
   const progress = useLibrary(useShallow(selectDailyProgress))
-  const activity = useLibrary(useShallow((s) => selectActivity(s, 14)))
+  const history = useLibrary((s) => s.history)
+  const activity = useMemo(() => buildActivity(history ?? {}, 14), [history])
   const mastered = useLibrary(selectMasteredCount)
   const vocab = useLibrary(useShallow(selectVocab))
   const known = useLibrary(useShallow((s) => selectSongs(s, 'known')))

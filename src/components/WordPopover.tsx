@@ -8,6 +8,7 @@ import { useLibrary } from '../store/useLibrary'
 import { speak, canSpeak } from '../lib/speak'
 import { SpeakableText } from './SpeakableText'
 import { SpeechCheck } from './SpeechCheck'
+import { useLangName } from '../lib/useLangName'
 
 export interface WordSelection {
   word: string
@@ -39,6 +40,8 @@ export function WordPopover({
   const setWordExample = useLibrary((s) => s.setWordExample)
 
   const cleanWord = selection.word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')
+  const langName = useLangName()
+  const langLabel = langName.charAt(0).toUpperCase() + langName.slice(1)
 
   useEffect(() => {
     let alive = true
@@ -99,7 +102,7 @@ export function WordPopover({
         style={{ left, top, width }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-xs uppercase tracking-[0.18em] text-mist/50">Inglês</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-mist/50">{langLabel}</div>
         <div className="flex items-center gap-2">
           <span className="font-display text-2xl text-cream">{cleanWord}</span>
           {canSpeak && (

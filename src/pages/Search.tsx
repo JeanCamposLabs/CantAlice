@@ -6,6 +6,7 @@ import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { TrackCard } from '../components/TrackCard'
 import { ConnectGate, EmptyState } from '../components/States'
+import { useLangName } from '../lib/useLangName'
 
 // A few gentle starting points for someone learning English through music.
 const SUGGESTIONS = [
@@ -20,6 +21,7 @@ const SUGGESTIONS = [
 ]
 
 export function SearchPage() {
+  const langName = useLangName()
   const auth = useSession((s) => s.auth)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SpotifyTrack[]>([])
@@ -71,7 +73,7 @@ export function SearchPage() {
         <h1 className="font-display text-4xl sm:text-5xl">
           O que vamos <span className="text-glow">cantar</span> hoje?
         </h1>
-        <p className="mt-2 text-mist/70">Busque qualquer música em inglês e comece a praticar.</p>
+        <p className="mt-2 text-mist/70">Busque qualquer música em {langName} e comece a praticar.</p>
       </div>
 
       {/* Search bar */}

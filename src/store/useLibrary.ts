@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { STORAGE_KEY } from '../config'
+import { STORAGE_KEY, DEFAULT_LANG, type TargetLang } from '../config'
 import type { SpotifyTrack } from '../spotify/api'
 import type { Example } from '../lyrics/examples'
 import { type SrsState, type Rating, newCard, isNew, schedule } from '../srs/fsrs'
@@ -45,6 +45,8 @@ export interface VocabWord {
   addedAt: number
   /** FSRS scheduling state for the word's two cards. */
   srs?: WordCards
+  /** Language this word belongs to (defaults to 'en' for older entries). */
+  lang?: TargetLang
 }
 
 interface LibraryState {
@@ -68,6 +70,8 @@ interface LibraryState {
   reviewedToday: { date: string | null; count: number }
   /** Cards reviewed per calendar day (YYYY-MM-DD → count), for the activity chart. */
   history: Record<string, number>
+  /** The language the user is learning (pt-BR is always the base language). */
+  targetLang: TargetLang
   /** Local-only marker for the one-time translation-quality refresh. */
   translationsVersion: number
 
@@ -95,6 +99,7 @@ interface LibraryState {
   reviewCard: (word: string, dir: ReviewDir, rating: Rating) => void
   setDailyNewLimit: (n: number) => void
   setDailyGoal: (n: number) => void
+  setTargetLang: (lang: TargetLang) => void
   /** Replace a saved word's translation (and its example's) after re-translating. */
   refreshWordTranslation: (word: string, translation: string, exampleTranslation?: string) => void
   setTranslationsVersion: (v: number) => void
@@ -166,6 +171,7 @@ export const useLibrary = create<LibraryState>()(
       dailyGoal: 10,
       reviewedToday: { date: null, count: 0 },
       history: {},
+      targetLang: DEFAULT_LANG,
       translationsVersion: 0,
 
       addSong: (track, status) =>
@@ -230,6 +236,7 @@ export const useLibrary = create<LibraryState>()(
                 addedAt: existing?.addedAt ?? Date.now(),
                 // Never reset review progress when re-saving a word.
                 srs: existing?.srs ?? freshCards(),
+                lang: existing?.lang ?? s.targetLang,
               },
             },
           }
@@ -291,6 +298,8 @@ export const useLibrary = create<LibraryState>()(
 
       setDailyGoal: (n) => set({ dailyGoal: Math.max(1, Math.round(n)) }),
 
+      setTargetLang: (lang) => set({ targetLang: lang }),
+
       refreshWordTranslation: (word, translation, exampleTranslation) =>
         set((s) => {
           const key = normWord(word)
@@ -330,7 +339,9 @@ export function selectSongs(state: LibraryState, status: SongStatus): SavedSong[
 }
 
 export function selectVocab(state: LibraryState): VocabWord[] {
-  return Object.values(state.vocab).sort((a, b) => b.addedAt - a.addedAt)
+  return Object.values(state.vocab)
+    .filter((w) => (w.lang ?? 'en') === state.targetLang)
+    .sort((a, b) => b.addedAt - a.addedAt)
 }
 
 /** Look up a saved word by its (normalized) text. */
@@ -379,6 +390,7 @@ const MASTERED_STABILITY_DAYS = 21
 export function selectMasteredCount(state: LibraryState): number {
   let n = 0
   for (const word of Object.values(state.vocab)) {
+    if ((word.lang ?? 'en') !== state.targetLang) continue
     const cards = word.srs
     if (
       cards?.fwd &&
@@ -420,6 +432,7 @@ export function selectReviewQueue(state: LibraryState, now = Date.now()): Review
   const newFwd: ReviewItem[] = []
   const newRev: ReviewItem[] = []
   for (const [key, word] of Object.entries(state.vocab)) {
+    if ((word.lang ?? 'en') !== state.targetLang) continue
     const cards = cardsOf(word)
     for (const dir of ['fwd', 'rev'] as const) {
       const card = cards[dir]
@@ -442,6 +455,7 @@ export function selectReviewCounts(
   let due = 0
   let newAvailable = 0
   for (const word of Object.values(state.vocab)) {
+    if ((word.lang ?? 'en') !== state.targetLang) continue
     const cards = cardsOf(word)
     for (const dir of ['fwd', 'rev'] as const) {
       const card = cards[dir]

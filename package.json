@@ -1,7 +1,7 @@
 {
   "name": "canta-alice",
   "private": true,
-  "version": "1.5.3",
+  "version": "1.6.0",
   "type": "module",
   "description": "Canta, Alice — aprender inglês cantando. A beautiful app for Alice to learn English through music.",
   "scripts": {

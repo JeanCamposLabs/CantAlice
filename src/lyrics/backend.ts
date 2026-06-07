@@ -4,6 +4,7 @@
  * configured, so the app falls back to its built-in providers.
  */
 import { SUPABASE_URL, SUPABASE_ANON_KEY, IS_CLOUD_CONFIGURED } from '../config'
+import { activeLang } from '../lib/lang'
 
 /** The translation backend shares Supabase config with cloud sync. */
 export const IS_TRANSLATE_BACKEND = IS_CLOUD_CONFIGURED
@@ -32,7 +33,7 @@ export async function backendTranslate(texts: string[]): Promise<string[] | null
     const res = await fetch(endpoint(), {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ mode: 'translate', texts }),
+      body: JSON.stringify({ mode: 'translate', texts, lang: activeLang() }),
     })
     if (!res.ok) return null
     const data = (await res.json()) as { translations?: string[] | null }
@@ -49,7 +50,7 @@ export async function backendExamples(query: string, limit = 6): Promise<BiExamp
     const res = await fetch(endpoint(), {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ mode: 'examples', word: query, limit }),
+      body: JSON.stringify({ mode: 'examples', word: query, limit, lang: activeLang() }),
     })
     if (!res.ok) return []
     const data = (await res.json()) as { examples?: BiExample[] }

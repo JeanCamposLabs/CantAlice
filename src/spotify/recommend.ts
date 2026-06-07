@@ -11,21 +11,39 @@
  */
 import { searchTracks, type SpotifyTrack } from './api'
 import type { SavedSong } from '../store/useLibrary'
+import type { TargetLang } from '../config'
+import { activeLang } from '../lib/lang'
 
-// Artists known for clear diction and simple, singable English — friendly for a
-// learner. Used to seed discovery (and as a fallback before anything is saved).
-const CURATED_ARTISTS = [
-  'Adele',
-  'Ed Sheeran',
-  'The Beatles',
-  'Coldplay',
-  'Taylor Swift',
-  'Bruno Mars',
-  'John Legend',
-  'Jason Mraz',
-  'Sara Bareilles',
-  'Norah Jones',
-]
+// Artists with clear diction and simple, singable lyrics in the target language
+// — friendly for a learner. Seeds discovery (and a fallback before anything is
+// saved). Keyed by target language.
+const CURATED_BY_LANG: Record<TargetLang, string[]> = {
+  en: [
+    'Adele',
+    'Ed Sheeran',
+    'The Beatles',
+    'Coldplay',
+    'Taylor Swift',
+    'Bruno Mars',
+    'John Legend',
+    'Jason Mraz',
+    'Sara Bareilles',
+    'Norah Jones',
+  ],
+  es: [
+    'Álvaro Soler',
+    'Pablo Alborán',
+    'Rosalía',
+    'Enrique Iglesias',
+    'Shakira',
+    'Jesse & Joy',
+    'Juanes',
+    'Manu Chao',
+    'Natalia Lafourcade',
+    'Sebastián Yatra',
+  ],
+}
+const CURATED_ARTISTS = (): string[] => CURATED_BY_LANG[activeLang()] ?? CURATED_BY_LANG.en
 
 /** The lead artist of a "feat./&/," joined credit, lowercased for comparison. */
 function leadArtist(artist: string): string {
@@ -56,9 +74,9 @@ async function recommendTracks(saved: SavedSong[], limit = 8): Promise<SpotifyTr
   const savedArtists = new Set(saved.map((s) => leadArtist(s.artist).toLowerCase()))
 
   const liked = favouriteArtists(saved, 2)
-  const discovery = shuffle(CURATED_ARTISTS.filter((a) => !savedArtists.has(a.toLowerCase())))
+  const discovery = shuffle(CURATED_ARTISTS().filter((a) => !savedArtists.has(a.toLowerCase())))
   const seeds = [...liked, ...discovery].slice(0, 4)
-  if (seeds.length === 0) seeds.push(...CURATED_ARTISTS.slice(0, 3))
+  if (seeds.length === 0) seeds.push(...CURATED_ARTISTS().slice(0, 3))
 
   const perSeed = await Promise.all(
     seeds.map((a) => searchTracks(`artist:"${a}"`, 8).catch(() => [] as SpotifyTrack[])),
@@ -90,10 +108,13 @@ async function recommendTracks(saved: SavedSong[], limit = 8): Promise<SpotifyTr
 let cache: { sig: string; promise: Promise<SpotifyTrack[]> } | null = null
 
 export function recommendedTracks(saved: SavedSong[]): Promise<SpotifyTrack[]> {
-  const sig = saved
-    .map((s) => s.id)
-    .sort()
-    .join(',')
+  const sig =
+    activeLang() +
+    '|' +
+    saved
+      .map((s) => s.id)
+      .sort()
+      .join(',')
   if (!cache || cache.sig !== sig) {
     cache = { sig, promise: recommendTracks(saved) }
   }

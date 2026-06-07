@@ -6,6 +6,7 @@
  * Supported in Chrome/Edge/Safari (often as `webkitSpeechRecognition`); where it
  * is unavailable `canListen` is false and the UI simply hides the mic.
  */
+import { langConfig } from './lang'
 
 interface RecognitionAlternative {
   transcript: string
@@ -42,12 +43,13 @@ export const canListen = getCtor() !== null
  * Listen for a single spoken utterance and resolve with the transcript.
  * Rejects on permission/error or if nothing was heard.
  */
-export function listenOnce(lang = 'en-US'): Promise<string> {
+export function listenOnce(lang?: string): Promise<string> {
+  const locale = lang ?? langConfig().speech
   return new Promise((resolve, reject) => {
     const Ctor = getCtor()
     if (!Ctor) return reject(new Error('unsupported'))
     const rec = new Ctor()
-    rec.lang = lang
+    rec.lang = locale
     rec.continuous = false
     rec.interimResults = false
     rec.maxAlternatives = 1

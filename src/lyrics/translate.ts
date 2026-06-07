@@ -10,13 +10,20 @@
  */
 import { TRANSLATE_BASE } from '../config'
 import { backendTranslate, IS_TRANSLATE_BACKEND } from './backend'
+import { activeLang, langConfig } from '../lib/lang'
 
 const GOOGLE_BASE = 'https://translate.googleapis.com/translate_a/single'
 
 /** Google's free endpoint — best quality, no key, CORS-enabled. */
 async function googleTranslate(text: string): Promise<string | null> {
   try {
-    const params = new URLSearchParams({ client: 'gtx', sl: 'en', tl: 'pt', dt: 't', q: text })
+    const params = new URLSearchParams({
+      client: 'gtx',
+      sl: langConfig().google,
+      tl: 'pt',
+      dt: 't',
+      q: text,
+    })
     const res = await fetch(`${GOOGLE_BASE}?${params}`)
     if (!res.ok) return null
     const data = await res.json()
@@ -36,7 +43,7 @@ async function googleTranslate(text: string): Promise<string | null> {
 /** MyMemory fallback — free, but lower quality; used only if Google fails. */
 async function myMemoryTranslate(text: string): Promise<string | null> {
   try {
-    const params = new URLSearchParams({ q: text, langpair: 'en|pt-BR' })
+    const params = new URLSearchParams({ q: text, langpair: `${langConfig().myMemory}|pt-BR` })
     const res = await fetch(`${TRANSLATE_BASE}?${params}`)
     if (!res.ok) return null
     const data = await res.json()
@@ -96,7 +103,7 @@ export async function translate(text: string, opts: { premium?: boolean } = {}):
   const clean = text.trim()
   if (!clean) return ''
   const premium = Boolean(opts.premium) && IS_TRANSLATE_BACKEND
-  const key = (premium ? 'd:' : 'g:') + clean.toLowerCase()
+  const key = (premium ? 'd:' : 'g:') + activeLang() + ':' + clean.toLowerCase()
   const cached = MEMORY.get(key)
   if (cached !== undefined) return cached
 

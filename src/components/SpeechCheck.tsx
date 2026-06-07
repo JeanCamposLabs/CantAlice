@@ -21,7 +21,7 @@ export function SpeechCheck({ target, label = 'Praticar' }: { target: string; la
     setPhase('listening')
     setScore(null)
     try {
-      const said = await listenOnce('en-US')
+      const said = await listenOnce()
       setHeard(said)
       setScore(scorePronunciation(target, said))
       setPhase('done')

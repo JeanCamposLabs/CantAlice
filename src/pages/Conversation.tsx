@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Loader2, Volume2, Lightbulb, Music2 } from 'lucide-react'
+import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, BookOpen, Play } from 'lucide-react'
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
@@ -15,6 +15,7 @@ import {
   type ConverseResult,
   type Turn,
 } from '../lib/converse'
+import { PHRASEBOOKS, type DialogLine } from '../content/phrasebook'
 
 interface Msg {
   role: 'user' | 'assistant'
@@ -24,13 +25,13 @@ interface Msg {
   hidden?: boolean
 }
 
-const SCENARIOS: { id: string; label: string; context: string | null }[] = [
+const SCENARIOS: { id: string; label: string; context: string | null; phrasebookId?: string }[] = [
   { id: 'free', label: '💬 Conversa livre', context: null },
-  { id: 'cafe', label: '☕ Pedir um café', context: 'ordering at a coffee shop like Starbucks; you are the friendly barista' },
-  { id: 'restaurant', label: '🍽️ Restaurante', context: 'dining at a restaurant; you are the waiter' },
-  { id: 'airport', label: '✈️ Aeroporto', context: 'airport check-in and boarding; you are the airline agent' },
-  { id: 'shop', label: '🛍️ Loja', context: 'shopping for clothes; you are the shop assistant' },
-  { id: 'smalltalk', label: '👋 Bate-papo', context: 'casual small talk with a new friend you just met' },
+  { id: 'cafe', label: '☕ Pedir um café', context: 'ordering at a coffee shop like Starbucks; you are the friendly barista', phrasebookId: 'cafe' },
+  { id: 'restaurant', label: '🍽️ Restaurante', context: 'dining at a restaurant; you are the waiter', phrasebookId: 'restaurant' },
+  { id: 'airport', label: '✈️ Aeroporto', context: 'airport check-in and boarding; you are the airline agent', phrasebookId: 'travel' },
+  { id: 'shop', label: '🛍️ Loja', context: 'shopping for clothes; you are the shop assistant', phrasebookId: 'shopping' },
+  { id: 'smalltalk', label: '👋 Bate-papo', context: 'casual small talk with a new friend you just met', phrasebookId: 'greetings' },
 ]
 
 const KICKOFF = '(Begin: greet me in character and ask your first question.)'
@@ -68,14 +69,18 @@ export function ConversationPage() {
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0]
 
+  const templateDialog: DialogLine[] | undefined = scenario.phrasebookId
+    ? PHRASEBOOKS[lang.code]?.find((s) => s.id === scenario.phrasebookId)?.dialog
+    : undefined
+
+  const conversationActive = messages.length > 0 || busy
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, busy])
 
   const historyTurns = (): Turn[] => messages.map((m) => ({ role: m.role, content: m.content }))
 
-  // Always speak the reply in the natural cloud voice; fall back to the browser
-  // voice only if the server couldn't synthesize audio.
   const voiceReply = (r: ConverseResult) => {
     if (r.audio) void playBase64Mp3(r.audio)
     else if (canSpeak) speak(r.reply)
@@ -85,7 +90,6 @@ export function ConversationPage() {
     text?: string
     audioBase64?: string
     audioMime?: string
-    /** Show this as the user's bubble immediately, before the reply arrives. */
     display?: string
   }) => {
     setBusy(true)
@@ -103,7 +107,6 @@ export function ConversationPage() {
       })
       setMessages((prev) => {
         const next = [...prev]
-        // If we didn't already show the user's message (Whisper path), add it now.
         if (!opts.display) next.push({ role: 'user', content: r.transcript })
         next.push({ role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio })
         return next
@@ -117,11 +120,9 @@ export function ConversationPage() {
   }
 
   const startScenario = async (id: string) => {
-    setScenarioId(id)
-    setMessages([])
-    setError(null)
     const ctx = SCENARIOS.find((s) => s.id === id)?.context ?? null
     setBusy(true)
+    setError(null)
     try {
       const r = await converse({ scenario: ctx, history: [], text: KICKOFF, wantAudio: true })
       setMessages([
@@ -136,6 +137,12 @@ export function ConversationPage() {
     }
   }
 
+  const selectScenario = (id: string) => {
+    setScenarioId(id)
+    setMessages([])
+    setError(null)
+  }
+
   const sendText = () => {
     const t = text.trim()
     if (!t || busy) return
@@ -143,7 +150,6 @@ export function ConversationPage() {
     void send({ text: t, display: t })
   }
 
-  // Fast path: transcribe in the browser and send text (no upload / no Whisper).
   const listen = async () => {
     if (busy || listening) return
     setError(null)
@@ -159,7 +165,6 @@ export function ConversationPage() {
     }
   }
 
-  // Fallback for browsers without speech recognition: record and let Whisper transcribe.
   const toggleRecord = async () => {
     if (busy) return
     if (listening) {
@@ -226,7 +231,7 @@ export function ConversationPage() {
         {SCENARIOS.map((s) => (
           <button
             key={s.id}
-            onClick={() => startScenario(s.id)}
+            onClick={() => selectScenario(s.id)}
             disabled={busy}
             className={`rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
               s.id === scenarioId ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
@@ -237,14 +242,28 @@ export function ConversationPage() {
         ))}
       </div>
 
-      {/* Conversation */}
+      {/* Conversation / template area */}
       <div ref={scrollRef} className="glass flex-1 space-y-3 overflow-y-auto rounded-3xl p-4">
-        {visible.length === 0 && !busy && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-mist/50">
+        {!conversationActive && templateDialog && templateDialog.length > 0 ? (
+          <TemplateDialogPanel
+            dialog={templateDialog}
+            onStart={() => startScenario(scenarioId)}
+            busy={busy}
+          />
+        ) : !conversationActive ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-mist/50">
             <Mic size={28} />
-            <p>Escolha uma situação acima, ou toque no microfone e diga “{lang.hello}”.</p>
+            <p>Escolha uma situação acima, ou toque no microfone e diga "{lang.hello}".</p>
+            <button
+              onClick={() => startScenario(scenarioId)}
+              disabled={busy}
+              className="mt-1 flex items-center gap-2 rounded-full bg-rose-400/20 px-5 py-2 text-sm text-rose-100 transition-colors hover:bg-rose-400/30 disabled:opacity-50"
+            >
+              <Play size={14} /> Começar conversa
+            </button>
           </div>
-        )}
+        ) : null}
+
         {visible.map((m, i) => (
           <Bubble key={i} msg={m} />
         ))}
@@ -287,6 +306,58 @@ export function ConversationPage() {
           className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/8 text-cream hover:bg-white/15 disabled:opacity-40"
         >
           <Send size={18} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TemplateDialogPanel({
+  dialog,
+  onStart,
+  busy,
+}: {
+  dialog: DialogLine[]
+  onStart: () => void
+  busy: boolean
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-4 flex items-center gap-2 text-sm font-medium text-mist/60">
+        <BookOpen size={15} />
+        <span>Leia o diálogo de exemplo antes de praticar</span>
+      </div>
+      <div className="flex-1 space-y-2 overflow-y-auto">
+        {dialog.map((line, i) => {
+          const isYou = line.who === 'you'
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className={`flex ${isYou ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`max-w-[85%] space-y-0.5 ${isYou ? 'items-end' : 'items-start'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide ${isYou ? 'text-right text-rose-300/60' : 'text-mist/40'}`}>
+                  {isYou ? 'você' : 'eles'}
+                </p>
+                <div className={`rounded-2xl px-3.5 py-2.5 ${isYou ? 'bg-rose-400/20 text-cream' : 'bg-white/8 text-cream'}`}>
+                  <p className="leading-snug">{line.en}</p>
+                  <p className="mt-0.5 text-xs text-mist/50">{line.pt}</p>
+                </div>
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+      <div className="pt-4 text-center">
+        <button
+          onClick={onStart}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-full bg-rose-400/25 px-6 py-2.5 text-sm font-medium text-rose-100 transition-colors hover:bg-rose-400/35 disabled:opacity-50"
+        >
+          <Play size={14} /> Começar a praticar
         </button>
       </div>
     </div>

@@ -332,7 +332,12 @@ export const useLibrary = create<LibraryState>()(
       // (e.g. targetLang). Merge over the defaults so those are never undefined.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<LibraryState>
-        return { ...current, ...p, targetLang: p.targetLang ?? current.targetLang ?? 'en' }
+        // Guard against corrupt/foreign values (e.g. an old cloud blob): an
+        // unknown targetLang would make every language-filtered selector and
+        // langConfig() misbehave.
+        const lang = p.targetLang ?? current.targetLang ?? 'en'
+        const targetLang: TargetLang = lang === 'en' || lang === 'es' ? lang : 'en'
+        return { ...current, ...p, targetLang }
       },
     },
   ),

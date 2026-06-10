@@ -48,6 +48,12 @@ export function useKaraokePlayback(
     return 'unavailable'
   }, [isPremium, sdk.ready, sdk.deviceId, track?.previewUrl])
 
+  // The track-change cleanup below must see the *current* mode, not the one
+  // captured when the track loaded (the SDK can become ready mid-track,
+  // flipping preview → spotify; a stale closure would then skip the pause).
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+
   // — Manage the preview <audio> element —
   useEffect(() => {
     if (mode !== 'preview' || !track?.previewUrl) return
@@ -75,7 +81,7 @@ export function useKaraokePlayback(
     startedUriRef.current = null
     setError(null)
     return () => {
-      if (mode === 'spotify') {
+      if (modeRef.current === 'spotify') {
         playerController.pause().catch(() => {})
       }
     }

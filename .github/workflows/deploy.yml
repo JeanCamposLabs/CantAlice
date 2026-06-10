@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - claude/alice-english-music-learning-D48pU
   workflow_dispatch:
 
 # Permissions required by actions/deploy-pages.

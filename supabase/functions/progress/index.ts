@@ -51,23 +51,40 @@ Deno.serve(async (req: Request) => {
         .select('data')
         .eq('spotify_user_id', userId)
         .maybeSingle()
-      if (error) return json({ error: error.message }, 500)
+      if (error) {
+        // Don't echo internal database errors to the browser.
+        console.error('progress select failed:', error.message)
+        return json({ error: 'database error' }, 500)
+      }
       return json({ data: data?.data ?? null })
     }
 
     if (req.method === 'POST') {
-      const body = (await req.json().catch(() => ({}))) as { data?: unknown }
+      // Cap the blob size: a legit library (songs + vocab + history) is tens of
+      // KB; anything near the cap is abuse or a client bug, not real progress.
+      const raw = await req.text().catch(() => '')
+      if (raw.length > 1_000_000) return json({ error: 'payload too large' }, 413)
+      let body: { data?: unknown } = {}
+      try {
+        body = JSON.parse(raw) as { data?: unknown }
+      } catch {
+        /* treated as empty */
+      }
       const { error } = await supabase.from('progress').upsert({
         spotify_user_id: userId,
         data: body.data ?? {},
         updated_at: new Date().toISOString(),
       })
-      if (error) return json({ error: error.message }, 500)
+      if (error) {
+        console.error('progress upsert failed:', error.message)
+        return json({ error: 'database error' }, 500)
+      }
       return json({ ok: true })
     }
 
     return json({ error: 'method not allowed' }, 405)
   } catch (e) {
-    return json({ error: String(e) }, 500)
+    console.error('progress error:', e)
+    return json({ error: 'internal error' }, 500)
   }
 })

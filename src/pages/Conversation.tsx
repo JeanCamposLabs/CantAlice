@@ -110,6 +110,12 @@ export function ConversationPage() {
       })
       voiceReply(r)
     } catch (e) {
+      // The turn failed: take the optimistic bubble back and restore the text
+      // to the composer so a retry is one tap away (nothing was answered).
+      if (opts.display) {
+        setMessages((prev) => prev.slice(0, -1))
+        if (opts.text) setText(opts.text)
+      }
       setError(messageFromError(e, 'Algo deu errado. Tente de novo.'))
     } finally {
       setBusy(false)

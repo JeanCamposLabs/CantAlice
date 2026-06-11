@@ -77,7 +77,8 @@ export function SearchPage() {
             setQuery(e.target.value)
             setTouched(true)
           }}
-          placeholder="Ex.: Yesterday, Someone Like You, Perfect…"
+          aria-label="Buscar músicas"
+          placeholder={lang.searchPlaceholder}
           className="w-full bg-transparent text-lg outline-none placeholder:text-mist/40"
         />
         {query && (
@@ -86,6 +87,7 @@ export function SearchPage() {
               setQuery('')
               inputRef.current?.focus()
             }}
+            aria-label="Limpar busca"
             className="rounded-full p-1 text-mist/60 hover:text-cream"
           >
             <X size={20} />

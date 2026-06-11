@@ -34,6 +34,8 @@ export interface SavedSong {
   /** Times Alice has opened this song to practise. */
   practiceCount: number
   lastPracticedAt: number | null
+  /** Language this song belongs to (defaults to 'en' for older entries). */
+  lang?: TargetLang
 }
 
 export interface VocabWord {
@@ -138,7 +140,7 @@ function freshCards(): WordCards {
   return { fwd: newCard(), rev: newCard() }
 }
 
-function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
+function trackToSong(track: SpotifyTrack, status: SongStatus, lang: TargetLang): SavedSong {
   return {
     id: track.id,
     uri: track.uri,
@@ -151,6 +153,7 @@ function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
     addedAt: Date.now(),
     practiceCount: 0,
     lastPracticedAt: null,
+    lang,
   }
 }
 
@@ -178,9 +181,11 @@ export const useLibrary = create<LibraryState>()(
         set((s) => ({
           songs: {
             ...s.songs,
+            // Saving (or re-saving) claims the song for the language currently
+            // being studied, so it appears in the library the user is looking at.
             [track.id]: s.songs[track.id]
-              ? { ...s.songs[track.id], status }
-              : trackToSong(track, status),
+              ? { ...s.songs[track.id], status, lang: s.targetLang ?? 'en' }
+              : trackToSong(track, status, s.targetLang ?? 'en'),
           },
         })),
 
@@ -346,7 +351,9 @@ export const useLibrary = create<LibraryState>()(
 // — Selectors / helpers —
 export function selectSongs(state: LibraryState, status: SongStatus): SavedSong[] {
   return Object.values(state.songs)
-    .filter((s) => s.status === status)
+    .filter(
+      (s) => s.status === status && (s.lang ?? 'en') === (state.targetLang ?? 'en'),
+    )
     .sort((a, b) => b.addedAt - a.addedAt)
 }
 

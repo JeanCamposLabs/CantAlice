@@ -5,6 +5,11 @@
 // Tatoeba (a CC-licensed parallel corpus, our open "Reverso Context") also has
 // no CORS. Proxying both here keeps the key server-side and adds CORS.
 //
+// Auth: like `progress`/`converse`, the caller proves identity with their
+// Spotify access token (x-spotify-token). The endpoint spends paid quota
+// (DeepL, Claude), so it must not be open to anyone who scrapes its URL from
+// the public app bundle.
+//
 // Deploy:
 //   supabase secrets set DEEPL_API_KEY=xxxxxxxx-xxxx-...:fx   # free key ends in :fx
 //   supabase functions deploy translate
@@ -14,7 +19,8 @@
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-spotify-token',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -263,6 +269,15 @@ function selectVaried(
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
+    // Gate by Spotify identity (same model as `progress`/`converse`) so only
+    // logged-in users of the app can spend the DeepL/Claude quota.
+    const spotifyToken = req.headers.get('x-spotify-token')
+    if (!spotifyToken) return json({ error: 'missing spotify token' }, 401)
+    const me = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${spotifyToken}` },
+    })
+    if (!me.ok) return json({ error: 'invalid spotify token' }, 401)
+
     const body = (await req.json().catch(() => ({}))) as {
       mode?: string
       text?: string

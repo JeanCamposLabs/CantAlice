@@ -273,6 +273,7 @@ export function ConversationPage() {
           onClick={onMic}
           disabled={busy}
           title={listening ? 'Ouvindo…' : 'Falar'}
+          aria-label={listening ? 'Ouvindo…' : 'Falar'}
           className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${
             listening ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
           }`}
@@ -290,6 +291,7 @@ export function ConversationPage() {
         <button
           onClick={sendText}
           disabled={busy || !text.trim()}
+          aria-label="Enviar"
           className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/8 text-cream hover:bg-white/15 disabled:opacity-40"
         >
           <Send size={18} />

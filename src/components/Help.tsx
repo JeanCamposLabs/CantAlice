@@ -14,8 +14,9 @@ import { useUI } from '../store/useUI'
 import { useSession } from '../store/useSession'
 import { applyUpdate } from '../hooks/useAppUpdate'
 import { beginLogin, logout } from '../spotify/auth'
-import { IS_SPOTIFY_CONFIGURED } from '../config'
+import { IS_SPOTIFY_CONFIGURED, LANGUAGES, type TargetLang } from '../config'
 import { useLang } from '../lib/useLangName'
+import { useLibrary } from '../store/useLibrary'
 
 const tips = (langName: string) => [
   {
@@ -46,6 +47,9 @@ export function Help() {
   const auth = useSession((s) => s.auth)
   const isPremium = useSession((s) => s.isPremium)
   const lang = useLang()
+  const targetLang = useLibrary((s) => s.targetLang)
+  const setTargetLang = useLibrary((s) => s.setTargetLang)
+  const currentLang = targetLang ?? 'en'
 
   const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
@@ -92,6 +96,31 @@ export function Help() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Language switcher — tucked in Help so it is intentional, not accidental */}
+            <div className="mt-4 rounded-2xl bg-white/5 p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-mist/45">
+                Idioma que estou aprendendo
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(Object.keys(LANGUAGES) as TargetLang[]).map((code) => (
+                  <button
+                    key={code}
+                    onClick={() => setTargetLang(code)}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition-colors ${
+                      currentLang === code
+                        ? 'bg-rose-400/25 text-rose-100'
+                        : 'bg-white/8 text-mist/70 hover:bg-white/15'
+                    }`}
+                  >
+                    {LANGUAGES[code].name}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-mist/45">
+                Vocabulário e progresso são separados por idioma.
+              </p>
             </div>
 
             {auth === 'loggedin' && !isPremium && (

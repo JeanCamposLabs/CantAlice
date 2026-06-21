@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Volume2, Copy, Check, MessagesSquare } from 'lucide-react'
+import { ChevronDown, Volume2, Copy, Check, MessagesSquare, Play } from 'lucide-react'
 import { PHRASEBOOKS, type Scenario, type Phrase, type DialogLine } from '../content/phrasebook'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
+import { ShadowDialog } from '../components/ShadowDialog'
 import { speak, canSpeak } from '../lib/speak'
 import { useLibrary } from '../store/useLibrary'
 
@@ -46,6 +47,7 @@ function ScenarioCard({
   isOpen: boolean
   onToggle: () => void
 }) {
+  const [shadowMode, setShadowMode] = useState(false)
   return (
     <div className="glass overflow-hidden rounded-3xl">
       <button
@@ -81,7 +83,23 @@ function ScenarioCard({
                 <PhraseRow key={i} phrase={p} />
               ))}
 
-              {scenario.dialog && <Dialog lines={scenario.dialog} />}
+              {scenario.dialog && (
+                shadowMode ? (
+                  <ShadowDialog lines={scenario.dialog} onClose={() => setShadowMode(false)} />
+                ) : (
+                  <>
+                    <Dialog lines={scenario.dialog} />
+                    <div className="mt-3 flex justify-center">
+                      <button
+                        onClick={() => setShadowMode(true)}
+                        className="inline-flex items-center gap-2 rounded-full bg-aurora-1/15 px-4 py-2 text-sm font-semibold text-aurora-1 transition-colors hover:bg-aurora-1/25"
+                      >
+                        <Play size={14} /> Treinar passo a passo
+                      </button>
+                    </div>
+                  </>
+                )
+              )}
             </div>
           </motion.div>
         )}

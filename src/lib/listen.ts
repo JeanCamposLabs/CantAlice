@@ -39,9 +39,12 @@ function getCtor(): RecognitionCtor | null {
 
 export const canListen = getCtor() !== null
 
+/** Hard ceiling for a single listen, so the mic can never get stuck "on". */
+const LISTEN_TIMEOUT_MS = 12_000
+
 /**
  * Listen for a single spoken utterance and resolve with the transcript.
- * Rejects on permission/error or if nothing was heard.
+ * Rejects on permission/error, if nothing was heard, or on timeout.
  */
 export function listenOnce(lang?: string): Promise<string> {
   const locale = lang ?? langConfig().speech
@@ -53,27 +56,40 @@ export function listenOnce(lang?: string): Promise<string> {
     rec.continuous = false
     rec.interimResults = false
     rec.maxAlternatives = 1
+
     let settled = false
-    rec.onresult = (e) => {
+    // Some mobile browsers (notably iOS / installed PWAs) start recognition but
+    // then never fire result/error/end. Without this watchdog the Promise — and
+    // the UI's "listening" state that depends on it — would hang forever, which
+    // is why the conversation screen sometimes froze until the app was closed
+    // and reopened. The timer guarantees we always settle and free the mic.
+    const watchdog = setTimeout(() => {
+      if (settled) return
       settled = true
-      resolve((e.results?.[0]?.[0]?.transcript ?? '').trim())
-    }
-    rec.onerror = (e) => {
-      if (!settled) {
-        settled = true
-        reject(new Error(e.error || 'error'))
+      try {
+        rec.abort()
+      } catch {
+        /* ignore */
       }
+      reject(new Error('timeout'))
+    }, LISTEN_TIMEOUT_MS)
+
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(watchdog)
+      fn()
     }
-    rec.onend = () => {
-      if (!settled) {
-        settled = true
-        reject(new Error('no-speech'))
-      }
-    }
+
+    rec.onresult = (e) =>
+      finish(() => resolve((e.results?.[0]?.[0]?.transcript ?? '').trim()))
+    rec.onerror = (e) => finish(() => reject(new Error(e.error || 'error')))
+    rec.onend = () => finish(() => reject(new Error('no-speech')))
+
     try {
       rec.start()
     } catch (e) {
-      reject(e as Error)
+      finish(() => reject(e as Error))
     }
   })
 }

@@ -10,6 +10,7 @@ import {
   TrendingUp,
   MessagesSquare,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
@@ -19,6 +20,7 @@ import { useUI } from '../store/useUI'
 import { useLibrary, selectReviewCounts } from '../store/useLibrary'
 import { Brand } from './Brand'
 import { beginLogin, logout } from '../spotify/auth'
+import { applyUpdate } from '../hooks/useAppUpdate'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { useLang } from '../lib/useLangName'
 
@@ -189,6 +191,14 @@ export function Sidebar() {
       </nav>
       <div className="mt-auto">
         <button
+          onClick={() => applyUpdate()}
+          title="Recarregar o app do zero, se algo travar"
+          className="mb-1 flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-medium text-mist/70 transition-colors hover:bg-white/5 hover:text-cream"
+        >
+          <RotateCcw size={20} />
+          <span className="text-[0.95rem]">Recarregar o app</span>
+        </button>
+        <button
           onClick={useUI.getState().openHelp}
           className="mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-medium text-mist/70 transition-colors hover:bg-white/5 hover:text-cream"
         >
@@ -229,6 +239,14 @@ export function MobileTopBar() {
     <header className="pt-safe sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-night-900/60 px-5 py-4 backdrop-blur-xl lg:hidden">
       <Brand compact />
       <div className="flex items-center gap-1">
+        <button
+          onClick={() => applyUpdate()}
+          aria-label="Recarregar o app"
+          title="Recarregar o app"
+          className="rounded-full p-2 text-mist/60 transition-colors hover:bg-white/10 hover:text-cream"
+        >
+          <RotateCcw size={20} />
+        </button>
         <button
           onClick={useUI.getState().openHelp}
           aria-label="Ajuda e dicas"

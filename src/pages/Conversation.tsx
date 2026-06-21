@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Loader2, Volume2, Lightbulb, Music2 } from 'lucide-react'
+import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, RotateCcw } from 'lucide-react'
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
 import { useLang } from '../lib/useLangName'
+import { applyUpdate } from '../hooks/useAppUpdate'
 import {
   converse,
   blobToBase64,
@@ -150,12 +151,14 @@ export function ConversationPage() {
     setListening(true)
     try {
       const said = await listenOnce()
-      setListening(false)
       if (said.trim()) await send({ text: said, display: said })
       else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
     } catch {
-      setListening(false)
       setError('Não consegui ouvir. Toque para tentar de novo, ou escreva abaixo.')
+    } finally {
+      // Always release the mic, even if recognition never reported back — this
+      // is what keeps the screen from freezing in the "ouvindo…" state.
+      setListening(false)
     }
   }
 
@@ -214,11 +217,22 @@ export function ConversationPage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] flex-col gap-4 lg:h-[calc(100dvh-3rem)]">
-      <div>
-        <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
-        <p className="mt-1 text-sm text-mist/65">
-          Fale ou escreva em {langName} — o tutor responde em voz e corrige com carinho.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
+          <p className="mt-1 text-sm text-mist/65">
+            Fale ou escreva em {langName} — o tutor responde em voz e corrige com carinho.
+          </p>
+        </div>
+        {/* Escape hatch: if the screen ever freezes, this reloads everything
+            fresh so there's no need to close and reopen the app. */}
+        <button
+          onClick={() => applyUpdate()}
+          title="Recarregar a conversa"
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/8 px-3 py-1.5 text-xs text-mist/70 transition-colors hover:bg-white/15 hover:text-cream"
+        >
+          <RotateCcw size={14} /> Recarregar
+        </button>
       </div>
 
       {/* Scenario chips */}

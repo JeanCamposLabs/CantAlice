@@ -7,6 +7,7 @@ import { UpdatePrompt } from './components/UpdatePrompt'
 import { Help } from './components/Help'
 import { Celebration } from './components/Celebration'
 import { InstallPrompt } from './components/InstallPrompt'
+import { Announcement } from './components/Announcement'
 import { VersionBadge } from './components/VersionBadge'
 import { RequestAccess } from './components/RequestAccess'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -146,6 +147,7 @@ export function App() {
 
       <UpdatePrompt />
       <InstallPrompt />
+      <Announcement />
       <Help />
       <RequestAccess />
       <Celebration />

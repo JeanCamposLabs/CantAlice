@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, Loader2 } from 'lucide-react'
 import { canListen, listenOnce, scorePronunciation, type PronScore } from '../lib/listen'
 
-type Phase = 'idle' | 'listening' | 'done' | 'error'
+type Phase = 'idle' | 'listening' | 'done' | 'error' | 'denied'
 
 /**
  * "Practise saying it" — tap the mic, say the English word/phrase, and get
@@ -25,8 +25,9 @@ export function SpeechCheck({ target, label = 'Praticar' }: { target: string; la
       setHeard(said)
       setScore(scorePronunciation(target, said))
       setPhase('done')
-    } catch {
-      setPhase('error')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      setPhase(msg === 'not-allowed' || msg === 'service-not-allowed' ? 'denied' : 'error')
     }
   }
 
@@ -106,6 +107,17 @@ export function SpeechCheck({ target, label = 'Praticar' }: { target: string; la
             className="text-xs text-mist/50"
           >
             Não consegui ouvir. Toque para tentar de novo.
+          </motion.span>
+        )}
+        {phase === 'denied' && (
+          <motion.span
+            key="denied"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-xs text-amber-300/80"
+          >
+            Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.
           </motion.span>
         )}
         {phase === 'listening' && (

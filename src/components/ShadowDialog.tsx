@@ -11,6 +11,7 @@ type LineState =
   | { kind: 'ready' }
   | { kind: 'listening' }
   | { kind: 'scored'; score: PronScore; heard: string }
+  | { kind: 'denied' }
 
 /**
  * Guided shadow-practice mode for a dialog.
@@ -63,8 +64,9 @@ export function ShadowDialog({ lines, onClose }: { lines: DialogLine[]; onClose:
       const heard = await listenOnce()
       const score = scorePronunciation(line.en, heard)
       setState({ kind: 'scored', score, heard })
-    } catch {
-      setState({ kind: 'ready' })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      setState(msg === 'not-allowed' || msg === 'service-not-allowed' ? { kind: 'denied' } : { kind: 'ready' })
     }
   }
 
@@ -201,7 +203,7 @@ export function ShadowDialog({ lines, onClose }: { lines: DialogLine[]; onClose:
         )}
 
         {/* Mic — only for "you" lines once TTS has played */}
-        {isYou && canListen && (state.kind === 'ready' || state.kind === 'scored') && (
+        {isYou && canListen && (state.kind === 'ready' || state.kind === 'scored' || state.kind === 'denied') && (
           <button
             onClick={listen}
             title="Falar"
@@ -219,7 +221,7 @@ export function ShadowDialog({ lines, onClose }: { lines: DialogLine[]; onClose:
         )}
 
         {/* Next / done */}
-        {(state.kind === 'waiting' || state.kind === 'scored' || (isYou && !canListen && state.kind === 'ready')) && (
+        {(state.kind === 'waiting' || state.kind === 'scored' || state.kind === 'denied' || (isYou && !canListen && state.kind === 'ready')) && (
           <button onClick={advance} className="btn-primary px-4 py-2">
             {step === lines.length - 1 ? (
               <><Check size={16} /> Concluir</>
@@ -236,6 +238,11 @@ export function ShadowDialog({ lines, onClose }: { lines: DialogLine[]; onClose:
         {state.kind === 'ready' && isYou && 'toque no microfone e repita'}
         {state.kind === 'listening' && 'ouvindo você…'}
       </p>
+      {state.kind === 'denied' && (
+        <p className="text-center text-xs text-amber-300/80">
+          Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.
+        </p>
+      )}
     </div>
   )
 }

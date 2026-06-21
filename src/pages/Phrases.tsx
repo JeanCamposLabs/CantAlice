@@ -15,7 +15,7 @@ export function PhrasesPage() {
   const phrasebook = PHRASEBOOKS[targetLang] ?? PHRASEBOOKS.en
   const [open, setOpen] = useState<string | null>(phrasebook[0]?.id ?? null)
   const [addOpen, setAddOpen] = useState(false)
-  const customPhrases = useLibrary((s) => s.customPhrases[targetLang] ?? [])
+  const customPhrases = useLibrary((s) => s.customPhrases[targetLang]) ?? []
   const removeCustomPhrase = useLibrary((s) => s.removeCustomPhrase)
   const lang = LANGUAGES[targetLang]
 

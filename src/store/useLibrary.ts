@@ -21,6 +21,13 @@ export interface WordCards {
 
 export type SongStatus = 'learning' | 'known'
 
+export interface CustomPhrase {
+  id: string
+  target: string
+  pt: string
+  addedAt: number
+}
+
 export interface SavedSong {
   id: string
   uri: string
@@ -74,6 +81,8 @@ interface LibraryState {
   targetLang: TargetLang
   /** Local-only marker for the one-time translation-quality refresh. */
   translationsVersion: number
+  /** User-created phrases, keyed by target language. */
+  customPhrases: Partial<Record<TargetLang, CustomPhrase[]>>
 
   // — song actions —
   addSong: (track: SpotifyTrack, status: SongStatus) => void
@@ -103,6 +112,10 @@ interface LibraryState {
   /** Replace a saved word's translation (and its example's) after re-translating. */
   refreshWordTranslation: (word: string, translation: string, exampleTranslation?: string) => void
   setTranslationsVersion: (v: number) => void
+
+  // — custom phrases —
+  addCustomPhrase: (lang: TargetLang, target: string, pt: string) => void
+  removeCustomPhrase: (lang: TargetLang, id: string) => void
 
   // — preferences —
   setOnboarded: (v: boolean) => void
@@ -173,6 +186,7 @@ export const useLibrary = create<LibraryState>()(
       history: {},
       targetLang: DEFAULT_LANG,
       translationsVersion: 0,
+      customPhrases: {},
 
       addSong: (track, status) =>
         set((s) => ({
@@ -321,6 +335,21 @@ export const useLibrary = create<LibraryState>()(
         }),
 
       setTranslationsVersion: (v) => set({ translationsVersion: v }),
+
+      addCustomPhrase: (lang, target, pt) =>
+        set((s) => {
+          const existing = s.customPhrases[lang] ?? []
+          const phrase: CustomPhrase = { id: `${Date.now()}`, target, pt, addedAt: Date.now() }
+          return { customPhrases: { ...s.customPhrases, [lang]: [...existing, phrase] } }
+        }),
+
+      removeCustomPhrase: (lang, id) =>
+        set((s) => ({
+          customPhrases: {
+            ...s.customPhrases,
+            [lang]: (s.customPhrases[lang] ?? []).filter((p) => p.id !== id),
+          },
+        })),
 
       setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),

@@ -117,6 +117,29 @@ export async function translate(text: string, opts: { premium?: boolean } = {}):
     persist()
     return translated
   }
-  // All providers failed — echo the input but don't cache it, so we retry.
   return clean
+}
+
+/**
+ * Translate text between any two languages via Google Translate.
+ * Used for the custom-phrase add flow where input can be in either direction.
+ * Not cached — called infrequently (user-initiated).
+ */
+export async function translateAny(text: string, from: string, to: string): Promise<string> {
+  const clean = text.trim()
+  if (!clean || from === to) return clean
+  try {
+    const params = new URLSearchParams({ client: 'gtx', sl: from, tl: to, dt: 't', q: clean })
+    const res = await fetch(`${GOOGLE_BASE}?${params}`)
+    if (!res.ok) return ''
+    const data = await res.json()
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return ''
+    const out = data[0]
+      .map((seg: unknown) => (Array.isArray(seg) ? (seg[0] as string) : ''))
+      .join('')
+      .trim()
+    return out || ''
+  } catch {
+    return ''
+  }
 }

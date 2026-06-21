@@ -1,17 +1,23 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Volume2, Copy, Check, MessagesSquare, Play } from 'lucide-react'
+import { ChevronDown, Volume2, Copy, Check, MessagesSquare, Play, Plus, Trash2 } from 'lucide-react'
 import { PHRASEBOOKS, type Scenario, type Phrase, type DialogLine } from '../content/phrasebook'
 import { SpeakableText } from '../components/SpeakableText'
 import { SpeechCheck } from '../components/SpeechCheck'
 import { ShadowDialog } from '../components/ShadowDialog'
+import { AddPhraseModal } from '../components/AddPhraseModal'
 import { speak, canSpeak } from '../lib/speak'
-import { useLibrary } from '../store/useLibrary'
+import { useLibrary, type CustomPhrase } from '../store/useLibrary'
+import { LANGUAGES } from '../config'
 
 export function PhrasesPage() {
-  const targetLang = useLibrary((s) => s.targetLang)
+  const targetLang = useLibrary((s) => s.targetLang) ?? 'en'
   const phrasebook = PHRASEBOOKS[targetLang] ?? PHRASEBOOKS.en
   const [open, setOpen] = useState<string | null>(phrasebook[0]?.id ?? null)
+  const [addOpen, setAddOpen] = useState(false)
+  const customPhrases = useLibrary((s) => s.customPhrases[targetLang] ?? [])
+  const removeCustomPhrase = useLibrary((s) => s.removeCustomPhrase)
+  const lang = LANGUAGES[targetLang]
 
   return (
     <div className="space-y-8">
@@ -24,6 +30,38 @@ export function PhrasesPage() {
         </p>
       </div>
 
+      {/* My phrases */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-2xl">Minhas frases</h2>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-rose-400/15 px-4 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-400/25"
+          >
+            <Plus size={15} /> Adicionar
+          </button>
+        </div>
+
+        {customPhrases.length === 0 ? (
+          <div className="glass flex flex-col items-center gap-3 rounded-3xl p-6 text-center">
+            <p className="text-sm text-mist/50">
+              Nenhuma frase ainda. Toque em <strong className="text-mist/70">Adicionar</strong> para
+              guardar frases do seu dia a dia em {lang.name}.
+            </p>
+          </div>
+        ) : (
+          <div className="glass space-y-2 rounded-3xl p-4">
+            {customPhrases.map((p) => (
+              <CustomPhraseRow
+                key={p.id}
+                phrase={p}
+                onDelete={() => removeCustomPhrase(targetLang, p.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="space-y-3">
         {phrasebook.map((s) => (
           <ScenarioCard
@@ -34,6 +72,8 @@ export function PhrasesPage() {
           />
         ))}
       </div>
+
+      {addOpen && <AddPhraseModal onClose={() => setAddOpen(false)} />}
     </div>
   )
 }
@@ -104,6 +144,35 @@ function ScenarioCard({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+function CustomPhraseRow({ phrase, onDelete }: { phrase: CustomPhrase; onDelete: () => void }) {
+  return (
+    <div className="flex items-start gap-2 rounded-2xl bg-white/[0.03] p-3">
+      <div className="min-w-0 flex-1">
+        <p className="leading-snug text-cream">{phrase.target}</p>
+        <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">{phrase.pt}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {canSpeak && (
+          <button
+            onClick={() => speak(phrase.target)}
+            title="Ouvir"
+            className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-aurora-3 hover:bg-white/15"
+          >
+            <Volume2 size={14} />
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          title="Remover frase"
+          className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-mist/50 hover:bg-rose-400/15 hover:text-rose-300"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   )
 }

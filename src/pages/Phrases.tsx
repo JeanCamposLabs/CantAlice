@@ -150,28 +150,35 @@ function ScenarioCard({
 
 function CustomPhraseRow({ phrase, onDelete }: { phrase: CustomPhrase; onDelete: () => void }) {
   return (
-    <div className="flex items-start gap-2 rounded-2xl bg-white/[0.03] p-3">
-      <div className="min-w-0 flex-1">
-        <p className="leading-snug text-cream">{phrase.target}</p>
-        <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">{phrase.pt}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {canSpeak && (
+    <div className="rounded-2xl bg-white/[0.03] p-3">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="leading-snug text-cream">
+            <SpeakableText text={phrase.target} />
+          </p>
+          <p className="mt-0.5 text-sm italic leading-snug text-rose-300/80">{phrase.pt}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {canSpeak && (
+            <button
+              onClick={() => speak(phrase.target)}
+              title="Ouvir"
+              className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-aurora-3 hover:bg-white/15"
+            >
+              <Volume2 size={14} />
+            </button>
+          )}
           <button
-            onClick={() => speak(phrase.target)}
-            title="Ouvir"
-            className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-aurora-3 hover:bg-white/15"
+            onClick={onDelete}
+            title="Remover frase"
+            className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-mist/50 hover:bg-rose-400/15 hover:text-rose-300"
           >
-            <Volume2 size={14} />
+            <Trash2 size={14} />
           </button>
-        )}
-        <button
-          onClick={onDelete}
-          title="Remover frase"
-          className="grid h-8 w-8 place-items-center rounded-full bg-white/8 text-mist/50 hover:bg-rose-400/15 hover:text-rose-300"
-        >
-          <Trash2 size={14} />
-        </button>
+        </div>
+      </div>
+      <div className="mt-1.5">
+        <SpeechCheck target={phrase.target} label="Falar" />
       </div>
     </div>
   )

@@ -41,6 +41,8 @@ export interface SavedSong {
   /** Times Alice has opened this song to practise. */
   practiceCount: number
   lastPracticedAt: number | null
+  /** Language this song belongs to (defaults to 'en' for older entries). */
+  lang?: TargetLang
 }
 
 export interface VocabWord {
@@ -151,7 +153,7 @@ function freshCards(): WordCards {
   return { fwd: newCard(), rev: newCard() }
 }
 
-function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
+function trackToSong(track: SpotifyTrack, status: SongStatus, lang: TargetLang): SavedSong {
   return {
     id: track.id,
     uri: track.uri,
@@ -164,6 +166,7 @@ function trackToSong(track: SpotifyTrack, status: SongStatus): SavedSong {
     addedAt: Date.now(),
     practiceCount: 0,
     lastPracticedAt: null,
+    lang,
   }
 }
 
@@ -192,9 +195,11 @@ export const useLibrary = create<LibraryState>()(
         set((s) => ({
           songs: {
             ...s.songs,
+            // Saving (or re-saving) claims the song for the language currently
+            // being studied, so it shows up in the library the user is viewing.
             [track.id]: s.songs[track.id]
-              ? { ...s.songs[track.id], status }
-              : trackToSong(track, status),
+              ? { ...s.songs[track.id], status, lang: s.targetLang ?? 'en' }
+              : trackToSong(track, status, s.targetLang ?? 'en'),
           },
         })),
 
@@ -361,7 +366,24 @@ export const useLibrary = create<LibraryState>()(
       // (e.g. targetLang). Merge over the defaults so those are never undefined.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<LibraryState>
-        return { ...current, ...p, targetLang: p.targetLang ?? current.targetLang ?? 'en' }
+        // Guard against corrupt/foreign values (e.g. an old cloud blob): an
+        // unknown targetLang would make every language-filtered selector and
+        // langConfig() misbehave.
+        const raw = p.targetLang ?? current.targetLang ?? 'en'
+        const targetLang: TargetLang = raw === 'en' || raw === 'es' ? raw : 'en'
+        // One-time migration: songs saved before they were per-language have no
+        // `lang`. Stamp them with the current language so they don't vanish from
+        // the (now language-filtered) library. Idempotent — only untagged songs
+        // are touched, so later loads leave already-tagged songs alone.
+        let songs = p.songs
+        if (songs && Object.values(songs).some((s) => s && s.lang === undefined)) {
+          const stamped: Record<string, SavedSong> = {}
+          for (const [id, s] of Object.entries(songs)) {
+            stamped[id] = s && s.lang === undefined ? { ...s, lang: targetLang } : s
+          }
+          songs = stamped
+        }
+        return { ...current, ...p, ...(songs ? { songs } : {}), targetLang }
       },
     },
   ),
@@ -370,7 +392,7 @@ export const useLibrary = create<LibraryState>()(
 // — Selectors / helpers —
 export function selectSongs(state: LibraryState, status: SongStatus): SavedSong[] {
   return Object.values(state.songs)
-    .filter((s) => s.status === status)
+    .filter((s) => s.status === status && (s.lang ?? 'en') === (state.targetLang ?? 'en'))
     .sort((a, b) => b.addedAt - a.addedAt)
 }
 

@@ -136,19 +136,33 @@ async function refreshToken(): Promise<string | null> {
     grant_type: 'refresh_token',
     refresh_token: refresh,
   })
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
+  let res: Response
+  try {
+    res = await fetch(TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    })
+  } catch {
+    // Network hiccup (offline, flaky connection) — keep the session so the
+    // next attempt can retry, instead of logging the user out.
+    return null
+  }
   if (!res.ok) {
-    logout()
+    // Only an invalid/revoked grant means the session is truly dead; a Spotify
+    // outage (5xx) or rate limit (429) must not destroy the refresh token.
+    if (res.status === 400 || res.status === 401 || res.status === 403) logout()
     return null
   }
   const data = await res.json()
   storeTokens(data)
   return data.access_token
 }
+
+// Spotify rotates refresh tokens, so two concurrent refreshes would race: the
+// loser presents an already-consumed token, gets rejected, and logs the user
+// out. Share a single in-flight refresh between all callers instead.
+let refreshInFlight: Promise<string | null> | null = null
 
 /**
  * Returns a valid access token, refreshing if needed, or null if not logged in.
@@ -160,7 +174,12 @@ export async function getValidAccessToken(): Promise<string | null> {
 
   // Refresh 60s before actual expiry to avoid edge races.
   if (Date.now() > expiresAt - 60_000) {
-    return refreshToken()
+    if (!refreshInFlight) {
+      refreshInFlight = refreshToken().finally(() => {
+        refreshInFlight = null
+      })
+    }
+    return refreshInFlight
   }
   return access
 }

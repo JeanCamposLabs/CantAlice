@@ -159,8 +159,10 @@ chave como **secret** (ela nunca vai para o navegador):
    de [`supabase/functions/translate/index.ts`](supabase/functions/translate/index.ts)
    e **Deploy**. (Ou via CLI: `supabase functions deploy translate`.)
    - ⚠️ **Desligue "Verify JWT"** nesta função também — senão o app cai no Google
-     + Wiktionary (sem DeepL nem Tatoeba). A `translate` não acessa dados de
-     usuário, então deixá-la sem gate é seguro. Quem usa a CLI já recebe isso via
+     + Wiktionary (sem DeepL nem Tatoeba). É seguro desligar: assim como a
+     `progress` e a `converse`, a `translate` confere a identidade pelo token do
+     Spotify por conta própria (ela gasta cota paga de DeepL/Claude, então não é
+     um endpoint aberto). Quem usa a CLI já recebe isso via
      [`supabase/config.toml`](supabase/config.toml).
 2. Pegue uma chave grátis em [DeepL API Free](https://www.deepl.com/pro-api)
    (500 mil caracteres/mês) e guarde como secret:

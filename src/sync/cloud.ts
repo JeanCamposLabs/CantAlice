@@ -3,8 +3,8 @@
  *
  * The function authenticates the caller by their Spotify access token (it calls
  * Spotify /me to resolve the user id), so each user can only read/write their
- * own row. We send the Supabase anon key as the Authorization bearer (it's a
- * valid project JWT) and the Spotify token in a custom header.
+ * own row. We still send the public Supabase anon/publishable key in the
+ * standard API headers, while the Spotify token travels in a custom header.
  *
  * No-ops gracefully when cloud sync isn't configured.
  */

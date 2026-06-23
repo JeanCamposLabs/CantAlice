@@ -82,7 +82,16 @@ export function listenOnce(lang?: string): Promise<string> {
     }
 
     rec.onresult = (e) =>
-      finish(() => resolve((e.results?.[0]?.[0]?.transcript ?? '').trim()))
+      finish(() => {
+        resolve((e.results?.[0]?.[0]?.transcript ?? '').trim())
+        // Release the microphone right away — some browsers (notably Safari)
+        // keep it hot for a while after a result if we don't stop explicitly.
+        try {
+          rec.stop()
+        } catch {
+          /* already stopped */
+        }
+      })
     rec.onerror = (e) => finish(() => reject(new Error(e.error || 'error')))
     rec.onend = () => finish(() => reject(new Error('no-speech')))
 

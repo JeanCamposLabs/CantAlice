@@ -6,22 +6,13 @@ import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { TrackCard } from '../components/TrackCard'
 import { ConnectGate, EmptyState } from '../components/States'
-import { useLangName } from '../lib/useLangName'
-
-// A few gentle starting points for someone learning English through music.
-const SUGGESTIONS = [
-  'The Beatles',
-  'Adele',
-  'Ed Sheeran',
-  'Coldplay',
-  'Frank Sinatra',
-  'Taylor Swift',
-  'John Legend',
-  'ABBA',
-]
+import { useLang } from '../lib/useLangName'
 
 export function SearchPage() {
-  const langName = useLangName()
+  const lang = useLang()
+  const langName = lang.name
+  // A few gentle starting points in the language being learned.
+  const suggestions = lang.suggestions
   const auth = useSession((s) => s.auth)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SpotifyTrack[]>([])
@@ -86,7 +77,8 @@ export function SearchPage() {
             setQuery(e.target.value)
             setTouched(true)
           }}
-          placeholder="Ex.: Yesterday, Someone Like You, Perfect…"
+          aria-label="Buscar músicas"
+          placeholder={lang.searchPlaceholder}
           className="w-full bg-transparent text-lg outline-none placeholder:text-mist/40"
         />
         {query && (
@@ -95,6 +87,7 @@ export function SearchPage() {
               setQuery('')
               inputRef.current?.focus()
             }}
+            aria-label="Limpar busca"
             className="rounded-full p-1 text-mist/60 hover:text-cream"
           >
             <X size={20} />
@@ -109,7 +102,7 @@ export function SearchPage() {
             <Sparkles size={16} /> Sugestões para começar
           </p>
           <div className="flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
+            {suggestions.map((s) => (
               <button
                 key={s}
                 onClick={() => {

@@ -92,6 +92,10 @@ export interface LangConfig {
   learner: string
   /** Example artists in the target language, for the "search a song" hint. */
   sampleArtists: string
+  /** Artist suggestions for the empty search screen, in the target language. */
+  suggestions: string[]
+  /** Placeholder for the search box, with song examples in the target language. */
+  searchPlaceholder: string
 }
 
 export const LANGUAGES: Record<TargetLang, LangConfig> = {
@@ -110,6 +114,17 @@ export const LANGUAGES: Record<TargetLang, LangConfig> = {
     hello: 'Hi!',
     learner: 'Alice',
     sampleArtists: 'um clássico dos Beatles ou da Adele',
+    suggestions: [
+      'The Beatles',
+      'Adele',
+      'Ed Sheeran',
+      'Coldplay',
+      'Frank Sinatra',
+      'Taylor Swift',
+      'John Legend',
+      'ABBA',
+    ],
+    searchPlaceholder: 'Ex.: Yesterday, Someone Like You, Perfect…',
   },
   es: {
     code: 'es',
@@ -126,6 +141,17 @@ export const LANGUAGES: Record<TargetLang, LangConfig> = {
     hello: '¡Hola!',
     learner: 'Lohanne',
     sampleArtists: 'um sucesso da Shakira ou do Bad Bunny',
+    suggestions: [
+      'Shakira',
+      'Bad Bunny',
+      'Rosalía',
+      'Luis Fonsi',
+      'Maná',
+      'Juanes',
+      'Enrique Iglesias',
+      'Álvaro Soler',
+    ],
+    searchPlaceholder: 'Ex.: La Tortura, Despacito, Sofía…',
   },
 }
 

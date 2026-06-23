@@ -138,6 +138,7 @@ function VolumeControl() {
         <div className="glass-strong rounded-full px-3 py-2">
           <input
             type="range"
+            aria-label="Volume"
             min={0}
             max={1}
             step={0.02}

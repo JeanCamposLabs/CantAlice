@@ -17,7 +17,11 @@ no caderninho de vocabulário.
 
 - **Cante junto** — letras sincronizadas (estilo karaokê) que acompanham a música em tempo real (Spotify Premium).
 - **Entenda tudo** — tradução de cada linha para o português e toque em qualquer palavra para ver o significado.
-- **Caderninho de vocabulário** — guarde palavras novas e pratique com flashcards.
+- **Caderninho de vocabulário** — guarde palavras novas e pratique com flashcards (repetição espaçada).
+- **Frases úteis** — frases do dia a dia e as suas próprias, com tradução e prática de pronúncia no microfone.
+- **Tradutor com exemplos reais** — traduza palavras e frases e veja exemplos bilíngues (estilo Reverso) para guardar na revisão.
+- **Conversar com IA** — um parceiro de conversa por voz que ouve, responde e fala de volta (opcional).
+- **Inglês ou espanhol** — cada pessoa escolhe o idioma que quer aprender.
 - **Minhas músicas** — duas coleções: *Quero aprender* e *Já sei cantar*.
 - **Acompanhe o progresso** — quantas músicas, quantas palavras, e continue de onde parou.
 - **Lindo de viver nele** — fundo aurora animado, vidro fosco, tipografia elegante e tudo em português.
@@ -240,13 +244,18 @@ completa, vê as traduções e monta o vocabulário.
 
 ```
 src/
-  config.ts            # Client ID, scopes, endpoints
+  config.ts            # Client ID, scopes, idiomas e endpoints
   spotify/             # auth (PKCE), Web API, Web Playback SDK
-  lyrics/              # LRClib (letras) + tradução (MyMemory)
+  lyrics/              # LRClib (letras) + tradução
+  content/             # frases úteis (phrasebook)
+  lib/                 # voz (falar/ouvir), idioma e conversa
+  srs/                 # repetição espaçada (FSRS)
   store/               # estado (Zustand): biblioteca, sessão, navegação
+  sync/                # sincronização na nuvem (Supabase)
   hooks/               # player e reprodução do karaokê
   components/          # UI (aurora, nav, letras, player, etc.)
-  pages/               # Início, Buscar, Minhas músicas, Vocabulário, Karaokê
+  pages/               # Início, Buscar, Músicas, Vocabulário, Tradutor, Frases, Conversar, Progresso, Karaokê
+supabase/              # schema SQL + Edge Functions (progress, translate, converse)
 ```
 
 ---

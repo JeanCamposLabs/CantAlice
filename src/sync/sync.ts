@@ -9,7 +9,7 @@
  * conflicts we keep whichever copy was touched most recently.
  */
 import { useEffect } from 'react'
-import { useLibrary, type SavedSong, type VocabWord } from '../store/useLibrary'
+import { useLibrary, type SavedSong, type VocabWord, type CustomPhrase } from '../store/useLibrary'
 import type { TargetLang } from '../config'
 import { useSession } from '../store/useSession'
 import { getValidAccessToken } from '../spotify/auth'
@@ -30,6 +30,8 @@ export interface Snapshot {
   largeLyrics: boolean
   wordHintSeen: boolean
   hasOnboarded: boolean
+  /** User-created phrases, keyed by target language. */
+  customPhrases: Partial<Record<TargetLang, CustomPhrase[]>>
   updatedAt: number
 }
 
@@ -49,6 +51,7 @@ function getSnapshot(): Snapshot {
     largeLyrics: s.largeLyrics,
     wordHintSeen: s.wordHintSeen,
     hasOnboarded: s.hasOnboarded,
+    customPhrases: s.customPhrases,
     updatedAt: Date.now(),
   }
 }
@@ -68,7 +71,33 @@ function applySnapshot(snap: Snapshot): void {
     largeLyrics: snap.largeLyrics,
     wordHintSeen: snap.wordHintSeen,
     hasOnboarded: snap.hasOnboarded,
+    customPhrases: snap.customPhrases ?? {},
   })
+}
+
+/**
+ * Union two per-language phrase maps, deduped by id. Never drops a phrase the
+ * user created on either device — mirroring the song/vocab merge philosophy, so
+ * a localStorage eviction or a second device can't make "Minhas frases" vanish.
+ */
+function mergeCustomPhrases(
+  local: Partial<Record<TargetLang, CustomPhrase[]>> | undefined,
+  cloud: Partial<Record<TargetLang, CustomPhrase[]>> | undefined,
+): Partial<Record<TargetLang, CustomPhrase[]>> {
+  const l = local ?? {}
+  const c = cloud ?? {}
+  const langs = new Set<TargetLang>([
+    ...(Object.keys(l) as TargetLang[]),
+    ...(Object.keys(c) as TargetLang[]),
+  ])
+  const out: Partial<Record<TargetLang, CustomPhrase[]>> = {}
+  for (const lang of langs) {
+    const byId = new Map<string, CustomPhrase>()
+    for (const p of c[lang] ?? []) byId.set(p.id, p)
+    for (const p of l[lang] ?? []) byId.set(p.id, p)
+    out[lang] = [...byId.values()].sort((a, b) => a.addedAt - b.addedAt)
+  }
+  return out
 }
 
 const songTouched = (s: SavedSong) => Math.max(s.lastPracticedAt ?? 0, s.addedAt)
@@ -143,6 +172,7 @@ export function mergeSnapshots(local: Snapshot, cloud: Snapshot | null): Snapsho
     largeLyrics: newer.largeLyrics,
     wordHintSeen: local.wordHintSeen || cloud.wordHintSeen,
     hasOnboarded: local.hasOnboarded || cloud.hasOnboarded,
+    customPhrases: mergeCustomPhrases(local.customPhrases, cloud.customPhrases),
     updatedAt: Date.now(),
   }
 }

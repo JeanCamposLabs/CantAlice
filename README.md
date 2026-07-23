@@ -207,6 +207,15 @@ Secrets → Actions), o workflow
 `supabase functions deploy` sempre que algo em `supabase/functions/**` muda —
 sem deploy manual. Sem o secret, ele é pulado sem erro.
 
+### 💤 Evitando a pausa automática do Supabase
+
+Projetos gratuitos do Supabase pausam sozinhos depois de **7 dias sem
+atividade** na API. O workflow
+[`keep-supabase-alive.yml`](.github/workflows/keep-supabase-alive.yml) faz uma
+chamada leve à API REST duas vezes por semana (segunda e quinta) usando as
+mesmas variáveis `SUPABASE_URL`/`SUPABASE_ANON_KEY` da sincronização na
+nuvem — sem elas configuradas, o job é pulado sem erro.
+
 ---
 
 ## 💻 Rodando localmente

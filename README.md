@@ -21,6 +21,7 @@ no caderninho de vocabulário.
 - **Frases úteis** — frases do dia a dia e as suas próprias, com tradução e prática de pronúncia no microfone.
 - **Tradutor com exemplos reais** — traduza palavras e frases e veja exemplos bilíngues (estilo Reverso) para guardar na revisão.
 - **Conversar com IA** — um parceiro de conversa por voz que ouve, responde e fala de volta (opcional).
+- **Modo espelho** — trave menos na conversação: você diz em português o que quer falar, a IA mostra e fala a frase no idioma que você estuda, você repete (com nota de pronúncia) e só então ela entra na conversa — que segue com tradução embaixo de cada resposta.
 - **Inglês ou espanhol** — cada pessoa escolhe o idioma que quer aprender.
 - **Minhas músicas** — duas coleções: *Quero aprender* e *Já sei cantar*.
 - **Acompanhe o progresso** — quantas músicas, quantas palavras, e continue de onde parou.
@@ -178,6 +179,17 @@ Google automaticamente. O Tatoeba é proxyado pela função porque não tem CORS
 A aba **Conversar** usa a função `converse`, que faz numa só chamada:
 voz → texto (Whisper), resposta do tutor (Claude) e texto → voz (OpenAI TTS).
 Ela se autentica pelo token do Spotify do usuário (não é um endpoint aberto).
+
+A aba tem dois modos, atendidos pela mesma função:
+
+- **💬 Direto** — você fala no idioma que está aprendendo e o tutor responde.
+- **🪞 Espelho** — você fala **em português** o que quer dizer (o Whisper ouve em
+  `pt`), o Claude devolve a frase pronta no idioma-alvo, o TTS fala, você repete
+  no microfone e ganha a nota por palavra. Repetiu bem? A frase entra sozinha na
+  conversa — e a resposta do tutor vem com a tradução em português embaixo.
+
+> Se você já tinha a função publicada, **republique a `converse`** para o modo
+> espelho funcionar (o app continua funcionando no modo direto sem isso).
 
 1. **Edge Functions → Create a function**, nome **`converse`**, cole
    [`supabase/functions/converse/index.ts`](supabase/functions/converse/index.ts),

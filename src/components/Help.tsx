@@ -4,6 +4,7 @@ import {
   Search,
   MicVocal,
   Languages,
+  MessagesSquare,
   Brain,
   RefreshCw,
   LogIn,
@@ -33,6 +34,11 @@ const tips = (langName: string) => [
     icon: Languages,
     title: 'Entenda tudo',
     text: 'Veja a tradução embaixo de cada linha e toque em qualquer palavra para guardá-la com uma frase de exemplo de verdade.',
+  },
+  {
+    icon: MessagesSquare,
+    title: 'Converse sem travar',
+    text: `Na aba Conversar, o modo 🪞 Espelho deixa você falar em português: a IA mostra e fala a frase em ${langName}, você repete e a conversa segue.`,
   },
   {
     icon: Brain,

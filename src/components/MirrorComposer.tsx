@@ -64,16 +64,37 @@ export function MirrorComposer({
   const [recording, setRecording] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
   const recorderRef = useRef<Recorder | null>(null)
+  const sendingRef = useRef(false)
+  const aliveRef = useRef(true)
 
-  // Drop the mic if the screen goes away mid-recording.
-  useEffect(() => () => recorderRef.current?.cancel(), [])
+  // Drop the mic if the screen goes away mid-recording, and stop any listen
+  // that's still in flight from turning into a request nobody asked for.
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+      recorderRef.current?.cancel()
+    }
+  }, [])
 
-  /** Hand the line to the conversation; keep it here if the turn failed. */
+  /**
+   * Hand the line to the conversation; keep it here if the turn failed.
+   *
+   * Guarded by a ref, not by state: the step only changes once the turn comes
+   * back, so tapping "Enviar" during the auto-send countdown would otherwise
+   * let the timer fire a second (paid) turn while the first is still in flight.
+   */
   const deliver = async (phrase: MirrorPhrase) => {
-    const ok = await onSend(phrase)
-    setStep((s) =>
-      ok ? { kind: 'ask' } : s.kind === 'repeat' ? { ...s, score: null, heard: '' } : s,
-    )
+    if (sendingRef.current) return
+    sendingRef.current = true
+    try {
+      const ok = await onSend(phrase)
+      setStep((s) =>
+        ok ? { kind: 'ask' } : s.kind === 'repeat' ? { ...s, score: null, heard: '' } : s,
+      )
+    } finally {
+      sendingRef.current = false
+    }
   }
 
   // Kept in a ref so the auto-send timer below is armed by the score alone, and
@@ -122,6 +143,7 @@ export function MirrorComposer({
     setListening('pt')
     try {
       const said = await listenOnce(PT_LOCALE)
+      if (!aliveRef.current) return
       if (said.trim()) await askFor({ text: said })
       else setHint('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
     } catch {

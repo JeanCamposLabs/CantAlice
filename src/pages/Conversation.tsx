@@ -328,7 +328,10 @@ export function ConversationPage() {
           <button
             key={m.id}
             onClick={() => setMode(m.id)}
-            disabled={busy}
+            // Also blocked while the mic is open: switching now would hide the
+            // stop button with the recorder still running, or land the turn
+            // that's already on its way in the mode she just left.
+            disabled={busy || listening}
             aria-pressed={m.id === mode}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
               m.id === mode ? 'bg-aurora-3/25 text-cream' : 'bg-white/8 text-mist/70 hover:bg-white/15'
@@ -394,7 +397,11 @@ export function ConversationPage() {
 
       {/* Composer — "espelho" swaps in its own say-it-first flow */}
       {mode === 'mirror' ? (
+        // Keyed by scenario: changing it wipes the conversation, so a phrase
+        // prepared for the old scene must not stay on screen to be sent into
+        // the new one.
         <MirrorComposer
+          key={scenarioId}
           langName={langName}
           busy={busy}
           onIntent={mirrorIntent}

@@ -14,9 +14,13 @@ export interface Turn {
 }
 
 export interface ConverseResult {
+  /** What the user said (in the target language, or in pt-BR for mode 'say'). */
   transcript: string
+  /** The tutor's reply — or, in mode 'say', the sentence for the user to say. */
   reply: string
   tip: string
+  /** pt-BR translation of `reply`, when `explain` was asked for. */
+  translation: string
   /** Base64 mp3 of the spoken reply, or null. */
   audio: string | null
 }
@@ -49,6 +53,14 @@ export async function converse(input: {
   audioMime?: string
   /** Ask the server to also synthesize the reply (cloud "natural" voice). */
   wantAudio?: boolean
+  /**
+   * 'chat' (default) — talk to the tutor in the language being learned.
+   * 'say' — tell it in Portuguese what you want to say and get the sentence
+   * back in the target language ("modo espelho").
+   */
+  mode?: 'chat' | 'say'
+  /** Also return a pt-BR translation of the reply (chat mode only). */
+  explain?: boolean
 }): Promise<ConverseResult> {
   const token = await getValidAccessToken()
   if (!token) throw new ConverseError('unauthorized')
@@ -75,6 +87,8 @@ export async function converse(input: {
         audioMime: input.audioMime,
         speak: input.wantAudio === true,
         lang: activeLang(),
+        mode: input.mode ?? 'chat',
+        explain: input.explain === true,
       }),
       signal: controller.signal,
     })
@@ -89,7 +103,15 @@ export async function converse(input: {
   if (res.status === 403) throw new ConverseError('not_allowed')
   if (res.status === 402) throw new ConverseError('no_funds')
   if (!res.ok) throw new ConverseError('failed')
-  return (await res.json()) as ConverseResult
+  // Normalize: a function deployed before "modo espelho" won't send `translation`.
+  const data = (await res.json()) as Partial<ConverseResult>
+  return {
+    transcript: data.transcript ?? '',
+    reply: data.reply ?? '',
+    tip: data.tip ?? '',
+    translation: data.translation ?? '',
+    audio: data.audio ?? null,
+  }
 }
 
 /** Read a recorded Blob as a bare base64 string (no data: prefix). */

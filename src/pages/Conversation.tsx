@@ -5,6 +5,7 @@ import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
 import { canListen, listenOnce } from '../lib/listen'
+import { startRecording, type Recorder } from '../lib/record'
 import { useLang } from '../lib/useLangName'
 import { applyUpdate } from '../hooks/useAppUpdate'
 import {
@@ -16,15 +17,35 @@ import {
   type ConverseResult,
   type Turn,
 } from '../lib/converse'
+import { MirrorComposer, type MirrorIntent, type MirrorPhrase } from '../components/MirrorComposer'
 import { PHRASEBOOKS, type DialogLine } from '../content/phrasebook'
 
 interface Msg {
   role: 'user' | 'assistant'
   content: string
   tip?: string
+  /** pt-BR: what the tutor's line means, or what she meant to say. */
+  pt?: string
   audio?: string | null
   hidden?: boolean
 }
+
+/** How the learner talks to the tutor. */
+type Mode = 'direct' | 'mirror'
+
+const MODES: { id: Mode; label: string; hint: (lang: string) => string }[] = [
+  {
+    id: 'direct',
+    label: '💬 Direto',
+    hint: (lang) => `Fale ou escreva em ${lang} — o tutor responde em voz e corrige com carinho.`,
+  },
+  {
+    id: 'mirror',
+    label: '🪞 Espelho',
+    hint: (lang) =>
+      `Você diz em português, a IA mostra em ${lang} e você repete — aí a conversa segue.`,
+  },
+]
 
 const SCENARIOS: { id: string; label: string; context: string | null; phrasebookId?: string }[] = [
   { id: 'free', label: '💬 Conversa livre', context: null },
@@ -58,14 +79,14 @@ export function ConversationPage() {
   const langName = lang.name
   const auth = useSession((s) => s.auth)
   const [scenarioId, setScenarioId] = useState('free')
+  const [mode, setMode] = useState<Mode>('direct')
   const [messages, setMessages] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
   const [listening, setListening] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const recorderRef = useRef<Recorder | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0]
@@ -96,11 +117,17 @@ export function ConversationPage() {
     audioMime?: string
     /** Show this as the user's bubble immediately, before the reply arrives. */
     display?: string
-  }) => {
+    /** pt-BR sub-line under her bubble (what she meant, in "espelho"). */
+    displayPt?: string
+  }): Promise<boolean> => {
     setBusy(true)
     setError(null)
     const history = historyTurns()
-    if (opts.display) setMessages((prev) => [...prev, { role: 'user', content: opts.display! }])
+    if (opts.display)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: opts.display!, pt: opts.displayPt },
+      ])
     try {
       const r = await converse({
         scenario: scenario.context,
@@ -109,23 +136,35 @@ export function ConversationPage() {
         text: opts.text,
         audioBase64: opts.audioBase64,
         audioMime: opts.audioMime,
+        // In "espelho" she's still learning to follow along — bring the
+        // Portuguese of the tutor's line back with it.
+        explain: mode === 'mirror',
       })
       setMessages((prev) => {
         const next = [...prev]
         // If we didn't already show the user's message (Whisper path), add it now.
         if (!opts.display) next.push({ role: 'user', content: r.transcript })
-        next.push({ role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio })
+        next.push({
+          role: 'assistant',
+          content: r.reply,
+          tip: r.tip,
+          pt: r.translation,
+          audio: r.audio,
+        })
         return next
       })
       voiceReply(r)
+      return true
     } catch (e) {
       // The turn failed: take the optimistic bubble back and restore the text to
-      // the composer so a retry is one tap away (nothing was answered).
+      // the composer so a retry is one tap away (nothing was answered). In
+      // "espelho" the composer keeps the sentence instead, so leave it alone.
       if (opts.display) {
         setMessages((prev) => prev.slice(0, -1))
-        if (opts.text) setText(opts.text)
+        if (opts.text && mode === 'direct') setText(opts.text)
       }
       setError(messageFromError(e, 'Algo deu errado. Tente de novo.'))
+      return false
     } finally {
       setBusy(false)
     }
@@ -138,10 +177,16 @@ export function ConversationPage() {
     const ctx = SCENARIOS.find((s) => s.id === id)?.context ?? null
     setBusy(true)
     try {
-      const r = await converse({ scenario: ctx, history: [], text: KICKOFF, wantAudio: true })
+      const r = await converse({
+        scenario: ctx,
+        history: [],
+        text: KICKOFF,
+        wantAudio: true,
+        explain: mode === 'mirror',
+      })
       setMessages([
         { role: 'user', content: KICKOFF, hidden: true },
-        { role: 'assistant', content: r.reply, tip: r.tip, audio: r.audio },
+        { role: 'assistant', content: r.reply, tip: r.tip, pt: r.translation, audio: r.audio },
       ])
       voiceReply(r)
     } catch (e) {
@@ -186,25 +231,17 @@ export function ConversationPage() {
   const toggleRecord = async () => {
     if (busy) return
     if (listening) {
-      recorderRef.current?.stop()
+      const rec = recorderRef.current
+      recorderRef.current = null
+      setListening(false)
+      const clip = await rec?.stop()
+      if (clip) {
+        void send({ audioBase64: await blobToBase64(clip.blob), audioMime: clip.mime })
+      }
       return
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
-      chunksRef.current = []
-      mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data)
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop())
-        setListening(false)
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
-        if (blob.size > 0) {
-          const audioBase64 = await blobToBase64(blob)
-          void send({ audioBase64, audioMime: blob.type })
-        }
-      }
-      mr.start()
-      recorderRef.current = mr
+      recorderRef.current = await startRecording()
       setListening(true)
       setError(null)
     } catch {
@@ -213,6 +250,36 @@ export function ConversationPage() {
   }
 
   const onMic = canListen ? listen : toggleRecord
+
+  // — "Modo espelho" —
+
+  /** She said it in Portuguese: ask for the sentence to say out loud. */
+  const mirrorIntent = async (intent: MirrorIntent): Promise<MirrorPhrase | null> => {
+    setError(null)
+    try {
+      const r = await converse({
+        mode: 'say',
+        scenario: scenario.context,
+        history: historyTurns(),
+        wantAudio: true,
+        text: intent.text,
+        audioBase64: intent.audioBase64,
+        audioMime: intent.audioMime,
+      })
+      if (!r.reply.trim()) {
+        setError('Não consegui montar a frase. Tente dizer de outro jeito.')
+        return null
+      }
+      return { pt: r.transcript, say: r.reply, note: r.tip, audio: r.audio }
+    } catch (e) {
+      setError(messageFromError(e, 'Não consegui montar a frase agora. Tente de novo.'))
+      return null
+    }
+  }
+
+  /** She repeated it — now it counts as her turn in the conversation. */
+  const mirrorSend = (phrase: MirrorPhrase) =>
+    send({ text: phrase.say, display: phrase.say, displayPt: phrase.pt })
 
   // — Gates —
   if (!IS_CONVERSE_CONFIGURED) {
@@ -241,7 +308,7 @@ export function ConversationPage() {
         <div>
           <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
           <p className="mt-1 text-sm text-mist/65">
-            Fale ou escreva em {langName} — o tutor responde em voz e corrige com carinho.
+            {(MODES.find((m) => m.id === mode) ?? MODES[0]).hint(langName)}
           </p>
         </div>
         {/* Escape hatch: if the screen ever freezes, this reloads everything
@@ -253,6 +320,26 @@ export function ConversationPage() {
         >
           <RotateCcw size={14} /> Recarregar
         </button>
+      </div>
+
+      {/* Mode switch — how she talks to the tutor */}
+      <div className="flex gap-2">
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => setMode(m.id)}
+            // Also blocked while the mic is open: switching now would hide the
+            // stop button with the recorder still running, or land the turn
+            // that's already on its way in the mode she just left.
+            disabled={busy || listening}
+            aria-pressed={m.id === mode}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+              m.id === mode ? 'bg-aurora-3/25 text-cream' : 'bg-white/8 text-mist/70 hover:bg-white/15'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
 
       {/* Scenario chips */}
@@ -308,7 +395,19 @@ export function ConversationPage() {
         </div>
       )}
 
-      {/* Composer */}
+      {/* Composer — "espelho" swaps in its own say-it-first flow */}
+      {mode === 'mirror' ? (
+        // Keyed by scenario: changing it wipes the conversation, so a phrase
+        // prepared for the old scene must not stay on screen to be sent into
+        // the new one.
+        <MirrorComposer
+          key={scenarioId}
+          langName={langName}
+          busy={busy}
+          onIntent={mirrorIntent}
+          onSend={mirrorSend}
+        />
+      ) : (
       <div className="flex items-center gap-2">
         <button
           onClick={onMic}
@@ -338,6 +437,7 @@ export function ConversationPage() {
           <Send size={18} />
         </button>
       </div>
+      )}
     </div>
   )
 }
@@ -421,7 +521,11 @@ function Bubble({ msg }: { msg: Msg }) {
               <Volume2 size={15} />
             </button>
           )}
-          <p className="leading-snug">{msg.content}</p>
+          <div className="space-y-0.5">
+            <p className="leading-snug">{msg.content}</p>
+            {/* In "espelho": what the line means, or what she meant to say. */}
+            {msg.pt && <p className="text-xs italic text-mist/55">{msg.pt}</p>}
+          </div>
         </div>
         <AnimatePresence>
           {msg.tip && (

@@ -21,7 +21,7 @@ no caderninho de vocabulário.
 - **Frases úteis** — frases do dia a dia e as suas próprias, com tradução e prática de pronúncia no microfone.
 - **Tradutor com exemplos reais** — traduza palavras e frases e veja exemplos bilíngues (estilo Reverso) para guardar na revisão.
 - **Conversar com IA** — um parceiro de conversa por voz que ouve, responde e fala de volta (opcional).
-- **Modo espelho** — trave menos na conversação: você diz em português o que quer falar, a IA mostra e fala a frase no idioma que você estuda, você repete (com nota de pronúncia) e só então ela entra na conversa — que segue com tradução embaixo de cada resposta.
+- **Modo espelho** — trave menos na conversação: você diz em português o que quer falar, a IA mostra e fala a frase no idioma que você estuda, você repete (com nota de pronúncia) e só então ela entra na conversa — que segue com tradução embaixo de cada resposta. O microfone fica aberto até você tocar em **Pronto**, então dá para pensar no meio da frase sem ser cortada.
 - **Inglês ou espanhol** — cada pessoa escolhe o idioma que quer aprender.
 - **Minhas músicas** — duas coleções: *Quero aprender* e *Já sei cantar*.
 - **Acompanhe o progresso** — quantas músicas, quantas palavras, e continue de onde parou.
@@ -187,6 +187,14 @@ A aba tem dois modos, atendidos pela mesma função:
   `pt`), o Claude devolve a frase pronta no idioma-alvo, o TTS fala, você repete
   no microfone e ganha a nota por palavra. Repetiu bem? A frase entra sozinha na
   conversa — e a resposta do tutor vem com a tradução em português embaixo.
+
+**Microfone:** o reconhecimento do navegador roda em modo contínuo e só fecha
+quando a pessoa toca em **Pronto** — pausar no meio da frase não corta mais a
+fala. Onde o navegador se recusa a escutar (caso clássico: app instalado na tela
+de início do iPhone/iPad, onde o Safari expõe a API mas não deixa usar), o app
+grava e manda para a função transcrever (`mode: 'hear'` — só Whisper, sem Claude
+nem TTS). Se nem gravar der, ela ainda pode escrever em português e ler a frase
+em voz alta antes de enviar.
 
 > Se você já tinha a função publicada, **republique a `converse`** para o modo
 > espelho funcionar (o app continua funcionando no modo direto sem isso).

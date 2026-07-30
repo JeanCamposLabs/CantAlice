@@ -103,6 +103,114 @@ export function listenOnce(lang?: string): Promise<string> {
   })
 }
 
+/** A listen that keeps going until the speaker says they're done. */
+export interface HeldListen {
+  /** Stop listening and resolve with everything heard so far. */
+  stop: () => Promise<string>
+  /** Give up without a result (also frees the mic). */
+  cancel: () => void
+}
+
+/**
+ * Listen until *stopped by the user*, not by a pause.
+ *
+ * `listenOnce` ends at the first silence, which cuts off anyone who is still
+ * finding the words — the beginner it's meant to help. Here recognition runs
+ * in continuous mode, partial results stream back through `onPartial` so the
+ * screen can show it's still listening, and the phrase is only complete when
+ * the speaker taps "pronto".
+ */
+export function listenHeld(opts: {
+  lang?: string
+  onPartial?: (text: string) => void
+  /** Safety net so the mic can never stay on forever. */
+  maxMs?: number
+}): HeldListen {
+  const locale = opts.lang ?? langConfig().speech
+  const Ctor = getCtor()
+  const finals: string[] = []
+  let live = ''
+  let settle: ((text: string) => void) | null = null
+  let done = false
+
+  const text = () => [...finals, live].join(' ').replace(/\s+/g, ' ').trim()
+
+  if (!Ctor) {
+    return { stop: async () => '', cancel: () => {} }
+  }
+
+  const rec = new Ctor()
+  rec.lang = locale
+  rec.continuous = true
+  rec.interimResults = true
+  rec.maxAlternatives = 1
+
+  const finish = () => {
+    if (done) return
+    done = true
+    clearTimeout(watchdog)
+    try {
+      rec.stop()
+    } catch {
+      /* already stopped */
+    }
+    settle?.(text())
+  }
+
+  const watchdog = setTimeout(finish, opts.maxMs ?? 60_000)
+
+  rec.onresult = (e) => {
+    // Recognition reports a growing list; anything final is banked, the rest is
+    // still being revised and only shown as a preview.
+    const results = e.results
+    const banked: string[] = []
+    let interim = ''
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i] as ArrayLike<RecognitionAlternative> & { isFinal?: boolean }
+      const said = (r[0]?.transcript ?? '').trim()
+      if (!said) continue
+      if (r.isFinal) banked.push(said)
+      else interim = said
+    }
+    finals.length = 0
+    finals.push(...banked)
+    live = interim
+    opts.onPartial?.(text())
+  }
+  // Chrome ends the session on a long silence even in continuous mode; keep
+  // what was heard rather than throwing it away.
+  rec.onend = () => finish()
+  rec.onerror = () => finish()
+
+  try {
+    rec.start()
+  } catch {
+    done = true
+    clearTimeout(watchdog)
+  }
+
+  return {
+    stop: () =>
+      new Promise<string>((resolve) => {
+        if (done) {
+          resolve(text())
+          return
+        }
+        settle = resolve
+        finish()
+      }),
+    cancel: () => {
+      done = true
+      clearTimeout(watchdog)
+      try {
+        rec.abort()
+      } catch {
+        /* ignore */
+      }
+    },
+  }
+}
+
 const words = (s: string): string[] =>
   s
     .toLowerCase()

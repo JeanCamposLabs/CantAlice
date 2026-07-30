@@ -17,7 +17,12 @@ import {
   type ConverseResult,
   type Turn,
 } from '../lib/converse'
-import { MirrorComposer, type MirrorIntent, type MirrorPhrase } from '../components/MirrorComposer'
+import {
+  MirrorComposer,
+  type MirrorClip,
+  type MirrorIntent,
+  type MirrorPhrase,
+} from '../components/MirrorComposer'
 import { PHRASEBOOKS, type DialogLine } from '../content/phrasebook'
 
 interface Msg {
@@ -277,6 +282,27 @@ export function ConversationPage() {
     }
   }
 
+  /**
+   * Transcribe a recorded repetition. Only used where the browser won't listen
+   * (an installed app on iPhone/iPad), so the practice still works there.
+   */
+  const mirrorHear = async (clip: MirrorClip): Promise<string | null> => {
+    setError(null)
+    try {
+      const r = await converse({
+        mode: 'hear',
+        history: [],
+        wantAudio: false,
+        audioBase64: clip.audioBase64,
+        audioMime: clip.audioMime,
+      })
+      return r.transcript
+    } catch (e) {
+      setError(messageFromError(e, 'Não consegui ouvir agora. Tente de novo.'))
+      return null
+    }
+  }
+
   /** She repeated it — now it counts as her turn in the conversation. */
   const mirrorSend = (phrase: MirrorPhrase) =>
     send({ text: phrase.say, display: phrase.say, displayPt: phrase.pt })
@@ -303,8 +329,8 @@ export function ConversationPage() {
   const visible = messages.filter((m) => !m.hidden)
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] flex-col gap-4 lg:h-[calc(100dvh-3rem)]">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex h-[calc(100dvh-7rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
+      <div className="flex shrink-0 items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
           <p className="mt-1 text-sm text-mist/65">
@@ -323,7 +349,7 @@ export function ConversationPage() {
       </div>
 
       {/* Mode switch — how she talks to the tutor */}
-      <div className="flex gap-2">
+      <div className="flex shrink-0 gap-2">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -342,14 +368,15 @@ export function ConversationPage() {
         ))}
       </div>
 
-      {/* Scenario chips */}
-      <div className="flex flex-wrap gap-2">
+      {/* Scenario chips — one scrolling row on a phone, so they can't eat the
+          height the conversation and the mic controls need. */}
+      <div className="-mx-1 flex shrink-0 gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
         {SCENARIOS.map((s) => (
           <button
             key={s.id}
             onClick={() => selectScenario(s.id)}
             disabled={busy}
-            className={`rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
               s.id === scenarioId ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
             }`}
           >
@@ -359,7 +386,12 @@ export function ConversationPage() {
       </div>
 
       {/* Conversation */}
-      <div ref={scrollRef} className="glass flex-1 space-y-3 overflow-y-auto rounded-3xl p-4">
+      {/* min-h-0 lets this pane give way when the mirror panel grows — without
+          it the composer gets pushed under the browser's toolbar. */}
+      <div
+        ref={scrollRef}
+        className="glass min-h-0 flex-1 space-y-3 overflow-y-auto rounded-3xl p-4"
+      >
         {!conversationActive && templateDialog && templateDialog.length > 0 ? (
           <TemplateDialogPanel
             dialog={templateDialog}
@@ -395,7 +427,9 @@ export function ConversationPage() {
         </div>
       )}
 
-      {/* Composer — "espelho" swaps in its own say-it-first flow */}
+      {/* Composer — "espelho" swaps in its own say-it-first flow. shrink-0 so
+          its controls stay on screen no matter how tall the panel gets. */}
+      <div className="shrink-0">
       {mode === 'mirror' ? (
         // Keyed by scenario: changing it wipes the conversation, so a phrase
         // prepared for the old scene must not stay on screen to be sent into
@@ -405,6 +439,7 @@ export function ConversationPage() {
           langName={langName}
           busy={busy}
           onIntent={mirrorIntent}
+          onHear={mirrorHear}
           onSend={mirrorSend}
         />
       ) : (
@@ -438,6 +473,7 @@ export function ConversationPage() {
         </button>
       </div>
       )}
+      </div>
     </div>
   )
 }

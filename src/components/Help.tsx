@@ -38,7 +38,7 @@ const tips = (langName: string) => [
   {
     icon: MessagesSquare,
     title: 'Converse sem travar',
-    text: `Na aba Conversar, o modo 🪞 Espelho deixa você falar em português: a IA mostra e fala a frase em ${langName}, você repete e a conversa segue.`,
+    text: `Na aba Conversar, o modo 🪞 Espelho deixa você falar em português: a IA mostra e fala a frase em ${langName}, você repete e a conversa segue. Fale sem pressa — o microfone só fecha quando você toca em "Pronto".`,
   },
   {
     icon: Brain,

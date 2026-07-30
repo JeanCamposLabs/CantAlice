@@ -57,8 +57,9 @@ export async function converse(input: {
    * 'chat' (default) — talk to the tutor in the language being learned.
    * 'say' — tell it in Portuguese what you want to say and get the sentence
    * back in the target language ("modo espelho").
+   * 'hear' — just transcribe the clip (used where the browser won't listen).
    */
-  mode?: 'chat' | 'say'
+  mode?: 'chat' | 'say' | 'hear'
   /** Also return a pt-BR translation of the reply (chat mode only). */
   explain?: boolean
 }): Promise<ConverseResult> {

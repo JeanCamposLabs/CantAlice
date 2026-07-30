@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Square } from 'lucide-react'
+import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Check } from 'lucide-react'
 import { canSpeak, speak } from '../lib/speak'
-import { canListen, listenOnce, scorePronunciation, type PronScore } from '../lib/listen'
+import { canListen, listenHeld, scorePronunciation, type HeldListen, type PronScore } from '../lib/listen'
 import { playBase64Mp3, blobToBase64 } from '../lib/converse'
-import { canRecord, startRecording, type Recorder } from '../lib/record'
+import { canRecord, isIosWebApp, startRecording, type Recorder } from '../lib/record'
 
 /** What the learner wants to say, in Portuguese — typed or spoken. */
 export interface MirrorIntent {
   text?: string
   audioBase64?: string
   audioMime?: string
+}
+
+/** A recorded clip, for when the browser won't do the listening itself. */
+export interface MirrorClip {
+  audioBase64: string
+  audioMime: string
 }
 
 /** The sentence to say out loud, as prepared by the AI. */
@@ -31,22 +37,38 @@ const AUTO_SEND_MS = 1600
 
 const PT_LOCALE = 'pt-BR'
 
+/** Ceiling for one attempt — she stops when she's ready, this is just a net. */
+const MAX_LISTEN_MS = 45_000
+
 type Step =
   | { kind: 'ask' }
   | { kind: 'repeat'; phrase: MirrorPhrase; score: PronScore | null; heard: string }
+
+/** Which half of the flow the mic is open for. */
+type Capturing = 'pt' | 'target' | null
+
+const MIC_BLOCKED_HINT = isIosWebApp()
+  ? 'O microfone está bloqueado. No iPhone/iPad, o app instalado na tela de início às vezes não recebe o microfone — abra o site pelo Safari e toque em "Permitir".'
+  : 'Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.'
 
 /**
  * "Modo espelho" — the Alice flow: she says in Portuguese what she wants to
  * say, the AI shows and speaks it in the language she's learning, she repeats
  * it, and only then does it go into the conversation.
  *
+ * The mic is hers to close: recognition runs until she taps "pronto", because
+ * stopping at the first pause cut her off mid-sentence and then marked it
+ * wrong. Where the browser refuses to listen at all (notably an installed app
+ * on iPhone/iPad), it records instead and has the server transcribe.
+ *
  * Owns the three-step machine and the microphone; the parent owns the network
- * calls (`onIntent`) and the conversation itself (`onSend`).
+ * calls and the conversation itself.
  */
 export function MirrorComposer({
   langName,
   busy,
   onIntent,
+  onHear,
   onSend,
 }: {
   langName: string
@@ -54,25 +76,33 @@ export function MirrorComposer({
   busy: boolean
   /** Translate what she wants to say. Resolves null when it didn't work out. */
   onIntent: (intent: MirrorIntent) => Promise<MirrorPhrase | null>
+  /** Transcribe a clip in the language being learned. Null when it failed. */
+  onHear: (clip: MirrorClip) => Promise<string | null>
   /** She's ready: put this line into the conversation. False if it didn't go. */
   onSend: (phrase: MirrorPhrase) => Promise<boolean>
 }) {
   const [step, setStep] = useState<Step>({ kind: 'ask' })
   const [text, setText] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [listening, setListening] = useState<'pt' | 'target' | null>(null)
-  const [recording, setRecording] = useState(false)
+  const [capturing, setCapturing] = useState<Capturing>(null)
+  const [partial, setPartial] = useState('')
   const [hint, setHint] = useState<string | null>(null)
+
+  const heldRef = useRef<HeldListen | null>(null)
   const recorderRef = useRef<Recorder | null>(null)
   const sendingRef = useRef(false)
   const aliveRef = useRef(true)
+  // Recognition is preferred (instant, free); a browser that refuses it once
+  // won't be asked again this session.
+  const engineRef = useRef<'speech' | 'record'>(canListen ? 'speech' : 'record')
 
-  // Drop the mic if the screen goes away mid-recording, and stop any listen
-  // that's still in flight from turning into a request nobody asked for.
+  // Drop the mic if the screen goes away mid-capture, and stop anything still
+  // in flight from turning into a request nobody asked for.
   useEffect(() => {
     aliveRef.current = true
     return () => {
       aliveRef.current = false
+      heldRef.current?.cancel()
       recorderRef.current?.cancel()
     }
   }, [])
@@ -97,8 +127,6 @@ export function MirrorComposer({
     }
   }
 
-  // Kept in a ref so the auto-send timer below is armed by the score alone, and
-  // not restarted every time the parent re-renders.
   const deliverRef = useRef(deliver)
   useEffect(() => {
     deliverRef.current = deliver
@@ -122,6 +150,7 @@ export function MirrorComposer({
     setThinking(true)
     setHint(null)
     const phrase = await onIntent(intent)
+    if (!aliveRef.current) return
     setThinking(false)
     if (!phrase) return
     setStep({ kind: 'repeat', phrase, score: null, heard: '' })
@@ -135,79 +164,161 @@ export function MirrorComposer({
     void askFor({ text: t })
   }
 
-  /** Step 1 — listen to her Portuguese (recognition, or Whisper as fallback). */
-  const listenPt = async () => {
-    if (thinking || busy || listening) return
-    if (!canListen) return toggleRecordPt()
+  /** Open the mic for either half of the flow. She decides when it closes. */
+  const startCapture = async (which: Exclude<Capturing, null>) => {
+    if (capturing || thinking || busy) return
     setHint(null)
-    setListening('pt')
-    try {
-      const said = await listenOnce(PT_LOCALE)
-      if (!aliveRef.current) return
-      if (said.trim()) await askFor({ text: said })
-      else setHint('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
-    } catch {
-      setHint('Não consegui ouvir. Tente de novo, ou escreva abaixo.')
-    } finally {
-      setListening(null)
-    }
-  }
+    setPartial('')
 
-  /** Fallback for browsers without speech recognition: record → Whisper (pt). */
-  const toggleRecordPt = async () => {
-    if (thinking || busy) return
-    if (recording) {
-      const rec = recorderRef.current
-      recorderRef.current = null
-      setRecording(false)
-      const clip = await rec?.stop()
-      if (clip) {
-        await askFor({ audioBase64: await blobToBase64(clip.blob), audioMime: clip.mime })
-      }
+    if (engineRef.current === 'speech') {
+      heldRef.current = listenHeld({
+        lang: which === 'pt' ? PT_LOCALE : undefined,
+        maxMs: MAX_LISTEN_MS,
+        onPartial: (t) => aliveRef.current && setPartial(t),
+      })
+      setCapturing(which)
       return
     }
+
     if (!canRecord) {
-      setHint('Este aparelho não grava áudio. Escreva em português abaixo.')
+      setHint(
+        which === 'pt'
+          ? 'Não consigo usar o microfone aqui. Escreva em português abaixo.'
+          : `Não consigo usar o microfone aqui. Leia em voz alta em ${langName} e toque em Enviar.`,
+      )
       return
     }
     try {
       recorderRef.current = await startRecording()
-      setRecording(true)
-      setHint(null)
+      if (!aliveRef.current) {
+        recorderRef.current.cancel()
+        return
+      }
+      setCapturing(which)
     } catch {
-      setHint('Não consegui acessar o microfone. Você pode escrever abaixo.')
+      setHint(MIC_BLOCKED_HINT)
     }
   }
 
-  /** Step 2 — she repeats the sentence in the language she's learning. */
-  const repeatIt = async () => {
-    if (step.kind !== 'repeat' || listening || thinking) return
-    const target = step.phrase.say
-    setHint(null)
-    setListening('target')
-    // Clearing the score also disarms a pending auto-send, so tapping "Repetir"
-    // right after a good try can't fire the line off mid-listen.
-    setStep((s) => (s.kind === 'repeat' ? { ...s, score: null, heard: '' } : s))
-    try {
-      const heard = await listenOnce()
-      const score = scorePronunciation(target, heard)
-      setStep((s) => (s.kind === 'repeat' ? { ...s, score, heard } : s))
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : ''
-      setHint(
-        msg === 'not-allowed' || msg === 'service-not-allowed'
-          ? 'Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.'
-          : 'Não consegui ouvir. Toque no microfone e repita.',
-      )
-    } finally {
-      setListening(null)
+  /** "Pronto" — close the mic and use what she said. */
+  const finishCapture = async () => {
+    const which = capturing
+    if (!which) return
+    setCapturing(null)
+    setPartial('')
+
+    // — Recognition path —
+    const held = heldRef.current
+    if (held) {
+      heldRef.current = null
+      const heard = await held.stop()
+      if (!aliveRef.current) return
+      if (heard.trim()) {
+        if (which === 'pt') await askFor({ text: heard })
+        else scoreAttempt(heard)
+        return
+      }
+      // Nothing came back. Safari hands us a recognizer that never delivers, so
+      // switch to recording from here on rather than blaming her.
+      if (canRecord) {
+        engineRef.current = 'record'
+        setHint('Não ouvi nada. Toque no microfone e fale de novo.')
+      } else {
+        setHint(MIC_BLOCKED_HINT)
+      }
+      return
     }
+
+    // — Recording path (server transcribes) —
+    const rec = recorderRef.current
+    recorderRef.current = null
+    const clip = await rec?.stop()
+    if (!aliveRef.current) return
+    if (!clip) {
+      setHint('Não ouvi nada. Toque no microfone e fale de novo.')
+      return
+    }
+    const audioBase64 = await blobToBase64(clip.blob)
+    if (!aliveRef.current) return
+    if (which === 'pt') {
+      await askFor({ audioBase64, audioMime: clip.mime })
+      return
+    }
+    setThinking(true)
+    const heard = await onHear({ audioBase64, audioMime: clip.mime })
+    if (!aliveRef.current) return
+    setThinking(false)
+    if (heard === null) return
+    if (!heard.trim()) {
+      setHint('Não ouvi nada. Toque no microfone e fale de novo.')
+      return
+    }
+    scoreAttempt(heard)
+  }
+
+  /** Cancel without using what was said. */
+  const abortCapture = () => {
+    heldRef.current?.cancel()
+    heldRef.current = null
+    recorderRef.current?.cancel()
+    recorderRef.current = null
+    setCapturing(null)
+    setPartial('')
+  }
+
+  const scoreAttempt = (heard: string) => {
+    setStep((s) => (s.kind === 'repeat' ? { ...s, score: scorePronunciation(s.phrase.say, heard), heard } : s))
   }
 
   const sendNow = () => {
     if (step.kind !== 'repeat' || busy) return
     void deliver(step.phrase)
   }
+
+  const restart = () => {
+    abortCapture()
+    setHint(null)
+    setStep({ kind: 'ask' })
+  }
+
+  // The mic control is the same in both steps: tap to open, tap to close.
+  const MicButton = ({ which, label }: { which: Exclude<Capturing, null>; label: string }) =>
+    capturing === which ? (
+      <button
+        onClick={() => void finishCapture()}
+        className="flex items-center gap-2 rounded-full bg-emerald-400/25 px-5 py-2.5 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-400/35"
+      >
+        <Check size={16} /> Pronto
+      </button>
+    ) : (
+      <button
+        onClick={() => void startCapture(which)}
+        disabled={thinking || busy}
+        className="flex items-center gap-2 rounded-full bg-rose-400/20 px-5 py-2.5 text-sm font-medium text-rose-100 transition-colors hover:bg-rose-400/30 disabled:opacity-50"
+      >
+        <Mic size={16} /> {label}
+      </button>
+    )
+
+  /** Shown while the mic is open, so she can see it's still listening. */
+  const LiveHint = ({ what }: { what: string }) => (
+    <div className="flex flex-col items-center gap-1 text-center">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-rose-200">
+        <motion.span
+          animate={{ opacity: [1, 0.3, 1] }}
+          transition={{ repeat: Infinity, duration: 1.4 }}
+        >
+          ●
+        </motion.span>
+        ouvindo… fale sem pressa e toque em <strong>Pronto</strong> quando terminar
+      </span>
+      {partial ? (
+        <span className="line-clamp-2 text-xs text-mist/60">{partial}</span>
+      ) : (
+        <span className="text-xs text-mist/35">{what}</span>
+      )}
+    </div>
+  )
 
   // — Step 2: repeat what the AI prepared —
   if (step.kind === 'repeat') {
@@ -216,133 +327,138 @@ export function MirrorComposer({
     const good = (score?.ratio ?? 0) >= GOOD_ENOUGH
 
     return (
-      <div className="glass space-y-3 rounded-3xl p-4">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-xs italic text-mist/50">você quis dizer: “{phrase.pt}”</p>
-          <button
-            onClick={() => setStep({ kind: 'ask' })}
-            title="Dizer outra coisa"
-            aria-label="Dizer outra coisa"
-            className="shrink-0 rounded-full p-1 text-mist/45 transition-colors hover:bg-white/10 hover:text-cream"
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
-
-        <div className="flex items-start gap-2.5">
-          <button
-            onClick={() => playPhrase(phrase)}
-            title="Ouvir de novo"
-            aria-label="Ouvir de novo"
-            className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15"
-          >
-            <Volume2 size={17} />
-          </button>
-          <p className="font-display text-xl leading-snug text-cream sm:text-2xl">{phrase.say}</p>
-        </div>
-
-        {phrase.note && (
-          <p className="rounded-xl bg-gold/10 px-3 py-1.5 text-xs text-gold/90">{phrase.note}</p>
-        )}
-
-        <AnimatePresence>
-          {score && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-1.5 text-center"
-            >
-              <span
-                className={`text-sm font-semibold ${
-                  perfect ? 'text-emerald-300' : good ? 'text-emerald-200' : 'text-amber-200'
-                }`}
-              >
-                {perfect ? 'Perfeito! 🎉' : good ? 'Muito bem! 👏' : 'Quase — tente de novo 🎤'}
-              </span>
-              {score.words.length > 1 && (
-                <div className="flex flex-wrap justify-center gap-1">
-                  {score.words.map((w, i) => (
-                    <span
-                      key={i}
-                      className={`rounded px-1.5 py-0.5 text-xs ${
-                        w.ok ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'
-                      }`}
-                    >
-                      {w.word}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {heard && !perfect && <span className="text-xs text-mist/40">ouvi: “{heard}”</span>}
-              {good && <span className="text-xs text-mist/45">enviando para a conversa…</span>}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="flex items-center justify-center gap-2 pt-0.5">
-          {canListen && (
+      <div className="glass flex max-h-[62dvh] flex-col rounded-3xl p-4">
+        {/* Everything that can grow lives in here, so the buttons below can
+            never be pushed off the screen (or under the browser's toolbar). */}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs italic text-mist/50">você quis dizer: “{phrase.pt}”</p>
             <button
-              onClick={repeatIt}
-              disabled={listening === 'target' || busy}
-              className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 ${
-                listening === 'target'
-                  ? 'bg-rose-500/80 text-white'
-                  : 'bg-rose-400/20 text-rose-100 hover:bg-rose-400/30'
-              }`}
+              onClick={restart}
+              title="Dizer outra coisa"
+              aria-label="Dizer outra coisa"
+              className="shrink-0 rounded-full p-1 text-mist/45 transition-colors hover:bg-white/10 hover:text-cream"
             >
-              <Mic size={16} className={listening === 'target' ? 'animate-pulse' : ''} />
-              {listening === 'target' ? 'ouvindo você…' : score ? 'Repetir' : 'Falar em ' + langName}
+              <RotateCcw size={14} />
             </button>
+          </div>
+
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={() => playPhrase(phrase)}
+              title="Ouvir de novo"
+              aria-label="Ouvir de novo"
+              className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15"
+            >
+              <Volume2 size={17} />
+            </button>
+            <p className="font-display text-lg leading-snug text-cream sm:text-2xl">{phrase.say}</p>
+          </div>
+
+          {phrase.note && (
+            <p className="rounded-xl bg-gold/10 px-3 py-1.5 text-xs text-gold/90">{phrase.note}</p>
           )}
+
+          <AnimatePresence>
+            {score && !capturing && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center gap-1.5 text-center"
+              >
+                <span
+                  className={`text-sm font-semibold ${
+                    perfect ? 'text-emerald-300' : good ? 'text-emerald-200' : 'text-amber-200'
+                  }`}
+                >
+                  {perfect ? 'Perfeito! 🎉' : good ? 'Muito bem! 👏' : 'Quase — tente de novo 🎤'}
+                </span>
+                {score.words.length > 1 && (
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {score.words.map((w, i) => (
+                      <span
+                        key={i}
+                        className={`rounded px-1.5 py-0.5 text-xs ${
+                          w.ok
+                            ? 'bg-emerald-400/15 text-emerald-200'
+                            : 'bg-rose-400/15 text-rose-200'
+                        }`}
+                      >
+                        {w.word}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {heard && !perfect && (
+                  <span className="text-xs text-mist/40">ouvi: “{heard}”</span>
+                )}
+                {good && <span className="text-xs text-mist/45">enviando para a conversa…</span>}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {capturing === 'target' && <LiveHint what={`repita em ${langName}`} />}
+          {thinking && (
+            <p className="flex items-center justify-center gap-1.5 text-xs text-mist/45">
+              <Loader2 size={11} className="animate-spin" /> ouvindo o que você disse…
+            </p>
+          )}
+        </div>
+
+        {/* Pinned controls — always on screen. */}
+        <div className="mt-3 flex shrink-0 items-center justify-center gap-2 pt-1">
+          <MicButton which="target" label={score ? 'Repetir' : `Falar em ${langName}`} />
           <button
             onClick={sendNow}
-            disabled={busy}
+            disabled={busy || capturing !== null}
             title="Enviar para a conversa"
             className="flex items-center gap-2 rounded-full bg-white/8 px-4 py-2.5 text-sm text-cream transition-colors hover:bg-white/15 disabled:opacity-50"
           >
             Enviar <ArrowRight size={15} />
           </button>
         </div>
-
-        <p className="text-center text-xs text-mist/35">
-          {canListen
-            ? 'ouça, repita em voz alta e siga a conversa'
-            : `leia em voz alta em ${langName} e toque em Enviar`}
-        </p>
-        {hint && <p className="text-center text-xs text-amber-300/80">{hint}</p>}
+        {hint && <p className="shrink-0 pt-2 text-center text-xs text-amber-300/80">{hint}</p>}
       </div>
     )
   }
 
   // — Step 1: say it in Portuguese —
-  const micBusy = listening === 'pt' || recording
+  if (capturing === 'pt') {
+    return (
+      <div className="glass space-y-3 rounded-3xl p-4">
+        <LiveHint what="diga em português o que quer falar" />
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={abortCapture}
+            className="rounded-full bg-white/8 px-4 py-2.5 text-sm text-mist/70 transition-colors hover:bg-white/15"
+          >
+            Cancelar
+          </button>
+          <MicButton which="pt" label="Falar em português" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <button
-          onClick={listenPt}
+          onClick={() => void startCapture('pt')}
           disabled={thinking || busy}
-          title={micBusy ? 'Ouvindo…' : 'Falar em português'}
-          aria-label={micBusy ? 'Ouvindo…' : 'Falar em português'}
-          className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${
-            micBusy ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
-          }`}
+          title="Falar em português"
+          aria-label="Falar em português"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/8 text-aurora-3 transition-colors hover:bg-white/15 disabled:opacity-50"
         >
-          {recording ? (
-            <Square size={16} className="animate-pulse" />
-          ) : (
-            <Mic size={20} className={micBusy ? 'animate-pulse' : ''} />
-          )}
+          <Mic size={20} />
         </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendTyped()}
-          placeholder={
-            micBusy ? 'ouvindo… fale em português' : 'diga em português o que quer falar…'
-          }
-          disabled={micBusy || thinking || busy}
+          placeholder="diga em português o que quer falar…"
+          disabled={thinking || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"
         />
         <button
@@ -359,8 +475,6 @@ export function MirrorComposer({
           <span className="inline-flex items-center gap-1.5">
             <Loader2 size={11} className="animate-spin" /> montando a frase em {langName}…
           </span>
-        ) : recording ? (
-          'gravando… toque no quadrado quando terminar'
         ) : (
           `você fala em português · a IA mostra em ${langName} · você repete`
         )}

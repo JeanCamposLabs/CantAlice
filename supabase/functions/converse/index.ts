@@ -12,6 +12,9 @@
 //   mode "say"  — the learner says in *Portuguese* what they want to say next,
 //     and we hand back the natural sentence to say out loud in the target
 //     language (the "mirror"/simultaneous-translation practice).
+//   mode "hear" — transcribe only (Whisper, no Claude, no TTS). This is what
+//     lets the repeat step work on iPhone/iPad home-screen apps, where Safari
+//     ships SpeechRecognition but refuses to run it.
 //
 // Auth: like `progress`, the caller proves identity with their Spotify access
 // token (x-spotify-token) so this isn't an open, abusable endpoint.
@@ -302,6 +305,7 @@ Deno.serve(async (req: Request) => {
       explain?: boolean
     }
     const sayMode = body.mode === 'say'
+    const hearMode = body.mode === 'hear'
     const cfg = LANGS[(body.lang as string) in LANGS ? (body.lang as string) : 'en']
 
     // Reject oversized payloads before any paid API call.
@@ -329,6 +333,12 @@ Deno.serve(async (req: Request) => {
       userText = await transcribe(body.audio, body.audioMime ?? 'audio/webm', heard)
     }
     if (!userText) return json({ error: 'empty input' }, 400)
+
+    // "hear" stops here: the app only wants to know what was said, so it can
+    // score the repetition itself. No Claude, no TTS — nothing else to pay for.
+    if (hearMode) {
+      return json({ transcript: userText, reply: '', tip: '', translation: '', audio: null })
+    }
 
     // 2) Either coach the learner's next line, or reply as the tutor.
     const out = sayMode

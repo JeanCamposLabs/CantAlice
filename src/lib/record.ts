@@ -16,6 +16,25 @@ export interface Clip {
   mime: string
 }
 
+/**
+ * True for an app installed on the iPhone/iPad home screen.
+ *
+ * Worth singling out: Safari ships SpeechRecognition there but often refuses to
+ * run it, and the site never appears under Ajustes → Safari → Microfone — so
+ * "give the app permission" is advice that can't be followed. Opening the site
+ * in Safari itself is the way out.
+ */
+export function isIosWebApp(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  // iPadOS reports itself as a Mac, so check for touch as well.
+  const isApple = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+  const standalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  return isApple && Boolean(standalone)
+}
+
 export interface Recorder {
   /** Stop and resolve with the clip, or null if nothing was captured. */
   stop: () => Promise<Clip | null>

@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Check } from 'lucide-react'
 import { canSpeak, speak } from '../lib/speak'
-import { canListen, listenHeld, scorePronunciation, type HeldListen, type PronScore } from '../lib/listen'
+import { scorePronunciation, type PronScore } from '../lib/listen'
 import { blobToBase64 } from '../lib/converse'
 import { playBase64Mp3 } from '../lib/audio'
-import { canRecord, micBlockedHint, startRecording, type Recorder } from '../lib/record'
+import { micBlockedHint } from '../lib/record'
+import { useMicCapture, NOTHING_HEARD_HINT, type CaptureResult } from '../hooks/useMicCapture'
 
 /** What the learner wants to say, in Portuguese — typed or spoken. */
 export interface MirrorIntent {
@@ -67,6 +68,7 @@ export function MirrorComposer({
   onIntent,
   onHear,
   onSend,
+  onCapturingChange,
 }: {
   langName: string
   /** True while the tutor is answering — the composer waits its turn. */
@@ -77,32 +79,40 @@ export function MirrorComposer({
   onHear: (clip: MirrorClip) => Promise<string | null>
   /** She's ready: put this line into the conversation. False if it didn't go. */
   onSend: (phrase: MirrorPhrase) => Promise<boolean>
+  /** Tells the page when the mic is open, so it can hold its own switches. */
+  onCapturingChange?: (active: boolean) => void
 }) {
   const [step, setStep] = useState<Step>({ kind: 'ask' })
   const [text, setText] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [capturing, setCapturing] = useState<Capturing>(null)
-  const [partial, setPartial] = useState('')
+  /** Which half of the flow the open mic belongs to. */
+  const [which, setWhich] = useState<Capturing>(null)
   const [hint, setHint] = useState<string | null>(null)
 
-  const heldRef = useRef<HeldListen | null>(null)
-  const recorderRef = useRef<Recorder | null>(null)
+  // The mic engine (held recognition + recording fallback) is shared with the
+  // direct-mode composer; this component only decides what a capture means.
+  const mic = useMicCapture(MAX_LISTEN_MS)
+  const capturing: Capturing = mic.capturing ? which : null
+  const partial = mic.partial
+
   const sendingRef = useRef(false)
   const aliveRef = useRef(true)
-  // Recognition is preferred (instant, free); a browser that refuses it once
-  // won't be asked again this session.
-  const engineRef = useRef<'speech' | 'record'>(canListen ? 'speech' : 'record')
 
-  // Drop the mic if the screen goes away mid-capture, and stop anything still
-  // in flight from turning into a request nobody asked for.
+  // Stop anything still in flight from turning into a request nobody asked
+  // for when the screen goes away (the mic itself is released by the hook).
   useEffect(() => {
     aliveRef.current = true
     return () => {
       aliveRef.current = false
-      heldRef.current?.cancel()
-      recorderRef.current?.cancel()
     }
   }, [])
+
+  // Let the page know when the mic is open (cleared again on unmount).
+  const micOpen = mic.capturing
+  useEffect(() => {
+    onCapturingChange?.(micOpen)
+    return () => onCapturingChange?.(false)
+  }, [micOpen, onCapturingChange])
 
   /**
    * Hand the line to the conversation; keep it here if the turn failed.
@@ -125,10 +135,12 @@ export function MirrorComposer({
   }
 
   const deliverRef = useRef(deliver)
-  const finishRef = useRef<() => Promise<void>>(async () => {})
+  const handleRef = useRef<(target: Exclude<Capturing, null>, r: CaptureResult) => Promise<void>>(
+    async () => {},
+  )
   useEffect(() => {
     deliverRef.current = deliver
-    finishRef.current = finishCapture
+    handleRef.current = handleCapture
   })
 
   // Repeated it well? Let the conversation move on by itself — that's the flow
@@ -163,114 +175,80 @@ export function MirrorComposer({
     void askFor({ text: t })
   }
 
+  /** What a finished capture means for either half of the flow. */
+  const handleCapture = async (target: Exclude<Capturing, null>, r: CaptureResult) => {
+    setWhich(null)
+    if (!aliveRef.current) return
+    switch (r.kind) {
+      case 'text':
+        if (target === 'pt') await askFor({ text: r.text })
+        else scoreAttempt(r.text)
+        return
+      case 'clip': {
+        const audioBase64 = await blobToBase64(r.blob)
+        if (!aliveRef.current) return
+        if (target === 'pt') {
+          await askFor({ audioBase64, audioMime: r.mime })
+          return
+        }
+        setThinking(true)
+        const heard = await onHear({ audioBase64, audioMime: r.mime })
+        if (!aliveRef.current) return
+        setThinking(false)
+        if (heard === null) return
+        if (!heard.trim()) {
+          setHint(NOTHING_HEARD_HINT)
+          return
+        }
+        scoreAttempt(heard)
+        return
+      }
+      case 'empty':
+        setHint(r.blocked ? micBlockedHint() : NOTHING_HEARD_HINT)
+        return
+      case 'noop':
+        return
+    }
+  }
+
   /** Open the mic for either half of the flow. She decides when it closes. */
-  const startCapture = async (which: Exclude<Capturing, null>) => {
+  const startCapture = async (target: Exclude<Capturing, null>) => {
     if (capturing || thinking || busy) return
     setHint(null)
-    setPartial('')
-
-    if (engineRef.current === 'speech') {
-      const held = listenHeld({
-        lang: which === 'pt' ? PT_LOCALE : undefined,
-        maxMs: MAX_LISTEN_MS,
-        onPartial: (t) => aliveRef.current && setPartial(t),
-        // The hold died on its own (watchdog / mic error): close the capture
-        // as if she tapped "Pronto", so the screen never shows a live mic
-        // that is actually dead.
-        onEnd: () => {
-          if (aliveRef.current && heldRef.current === held) void finishRef.current()
-        },
-      })
-      heldRef.current = held
-      setCapturing(which)
+    const res = await mic.start({
+      lang: target === 'pt' ? PT_LOCALE : undefined,
+      // The hold died on its own (watchdog / mic error): treat it like a
+      // "Pronto", so the screen never shows a live mic that is actually dead.
+      onAutoStop: (r) => void handleRef.current(target, r),
+    })
+    if (!aliveRef.current) return
+    if (res.ok) {
+      setWhich(target)
       return
     }
-
-    if (!canRecord) {
+    if (res.reason === 'canceled') return
+    if (res.reason === 'unsupported') {
       setHint(
-        which === 'pt'
+        target === 'pt'
           ? 'Não consigo usar o microfone aqui. Escreva em português abaixo.'
           : `Não consigo usar o microfone aqui. Leia em voz alta em ${langName} e toque em Enviar.`,
       )
-      return
-    }
-    try {
-      recorderRef.current = await startRecording()
-      if (!aliveRef.current) {
-        recorderRef.current.cancel()
-        return
-      }
-      setCapturing(which)
-    } catch {
+    } else {
       setHint(micBlockedHint())
     }
   }
 
   /** "Pronto" — close the mic and use what she said. */
   const finishCapture = async () => {
-    const which = capturing
-    if (!which) return
-    setCapturing(null)
-    setPartial('')
-
-    // — Recognition path —
-    const held = heldRef.current
-    if (held) {
-      heldRef.current = null
-      const heard = await held.stop()
-      if (!aliveRef.current) return
-      if (heard.trim()) {
-        if (which === 'pt') await askFor({ text: heard })
-        else scoreAttempt(heard)
-        return
-      }
-      // Nothing came back. Safari hands us a recognizer that never delivers, so
-      // switch to recording from here on rather than blaming her.
-      if (canRecord) {
-        engineRef.current = 'record'
-        setHint('Não ouvi nada. Toque no microfone e fale de novo.')
-      } else {
-        setHint(micBlockedHint())
-      }
-      return
-    }
-
-    // — Recording path (server transcribes) —
-    const rec = recorderRef.current
-    recorderRef.current = null
-    if (!rec) return // nothing was capturing (a second stop racing the first)
-    const clip = await rec.stop()
-    if (!aliveRef.current) return
-    if (!clip) {
-      setHint('Não ouvi nada. Toque no microfone e fale de novo.')
-      return
-    }
-    const audioBase64 = await blobToBase64(clip.blob)
-    if (!aliveRef.current) return
-    if (which === 'pt') {
-      await askFor({ audioBase64, audioMime: clip.mime })
-      return
-    }
-    setThinking(true)
-    const heard = await onHear({ audioBase64, audioMime: clip.mime })
-    if (!aliveRef.current) return
-    setThinking(false)
-    if (heard === null) return
-    if (!heard.trim()) {
-      setHint('Não ouvi nada. Toque no microfone e fale de novo.')
-      return
-    }
-    scoreAttempt(heard)
+    const target = which
+    if (!target) return
+    await handleRef.current(target, await mic.stop())
   }
 
   /** Cancel without using what was said. */
   const abortCapture = () => {
-    heldRef.current?.cancel()
-    heldRef.current = null
-    recorderRef.current?.cancel()
-    recorderRef.current = null
-    setCapturing(null)
-    setPartial('')
+    mic.cancel()
+    setWhich(null)
   }
 
   const scoreAttempt = (heard: string) => {

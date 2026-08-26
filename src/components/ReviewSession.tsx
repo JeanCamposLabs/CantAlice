@@ -12,8 +12,11 @@ import { useLangName } from '../lib/useLangName'
 
 /** Blank out the target word in an example so it can be produced from context. */
 function cloze(text: string, word: string) {
-  const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\p{L}*`, 'iu')
-  return text.replace(re, '_____')
+  // A capture group instead of \b: the ASCII word boundary never matches
+  // before an accent-initial word ("árbol", "él"), which would leave the
+  // answer visible on the card.
+  const re = new RegExp(`(^|[^\\p{L}])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\p{L}*`, 'iu')
+  return text.replace(re, '$1_____')
 }
 
 // Accent-folded so "esta" counts for "está" — she is recalling the word, not

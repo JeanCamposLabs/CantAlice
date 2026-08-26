@@ -4,14 +4,14 @@ import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, RotateCcw, BookOpen, Pl
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
-import { canListen, listenOnce } from '../lib/listen'
-import { startRecording, type Recorder } from '../lib/record'
+import { canListen, listenHeld, type HeldListen } from '../lib/listen'
+import { canRecord, micBlockedHint, startRecording, type Recorder } from '../lib/record'
 import { useLang } from '../lib/useLangName'
 import { applyUpdate } from '../hooks/useAppUpdate'
+import { playBase64Mp3 } from '../lib/audio'
 import {
   converse,
   blobToBase64,
-  playBase64Mp3,
   ConverseError,
   IS_CONVERSE_CONFIGURED,
   type ConverseResult,
@@ -88,11 +88,26 @@ export function ConversationPage() {
   const [messages, setMessages] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
   const [listening, setListening] = useState(false)
+  const [partial, setPartial] = useState('')
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const heldRef = useRef<HeldListen | null>(null)
   const recorderRef = useRef<Recorder | null>(null)
+  // Recognition is preferred (instant, free); a browser that refuses it once
+  // won't be asked again this session (same policy as the mirror composer).
+  const engineRef = useRef<'speech' | 'record'>(canListen ? 'speech' : 'record')
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Release the mic if she leaves the tab mid-capture.
+  useEffect(() => {
+    return () => {
+      heldRef.current?.cancel()
+      heldRef.current = null
+      recorderRef.current?.cancel()
+      recorderRef.current = null
+    }
+  }, [])
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0]
 
@@ -214,47 +229,91 @@ export function ConversationPage() {
     void send({ text: t, display: t })
   }
 
-  // Fast path: transcribe in the browser and send text (no upload / no Whisper).
-  const listen = async () => {
+  // The mic is hers to close: tap to open, speak without hurry, tap again to
+  // send. Recognition runs held-open (it survives Chrome's silence timeouts);
+  // where the browser won't listen (installed iPhone/iPad app), it records and
+  // lets the server transcribe instead.
+  const startListening = async () => {
     if (busy || listening) return
     setError(null)
-    setListening(true)
-    try {
-      const said = await listenOnce()
-      if (said.trim()) await send({ text: said, display: said })
-      else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
-    } catch {
-      setError('Não consegui ouvir. Toque para tentar de novo, ou escreva abaixo.')
-    } finally {
-      // Always release the mic, even if recognition never reported back — this
-      // is what keeps the screen from freezing in the "ouvindo…" state.
-      setListening(false)
-    }
-  }
+    setPartial('')
 
-  // Fallback for browsers without speech recognition: record and let Whisper transcribe.
-  const toggleRecord = async () => {
-    if (busy) return
-    if (listening) {
-      const rec = recorderRef.current
-      recorderRef.current = null
-      setListening(false)
-      const clip = await rec?.stop()
-      if (clip) {
-        void send({ audioBase64: await blobToBase64(clip.blob), audioMime: clip.mime })
-      }
+    if (engineRef.current === 'speech') {
+      const held = listenHeld({
+        maxMs: 60_000,
+        onPartial: (t) => setPartial(t),
+        // The hold died on its own (watchdog / mic error): close the capture
+        // as if she tapped the mic, so the screen never freezes "ouvindo…".
+        onEnd: () => {
+          if (heldRef.current === held) void stopRef.current()
+        },
+      })
+      heldRef.current = held
+      setListening(true)
+      return
+    }
+
+    if (!canRecord) {
+      setError(micBlockedHint())
       return
     }
     try {
       recorderRef.current = await startRecording()
       setListening(true)
-      setError(null)
     } catch {
       setError('Não consegui acessar o microfone. Você pode digitar em vez disso.')
     }
   }
 
-  const onMic = canListen ? listen : toggleRecord
+  /** Second tap — close the mic and send what she said. */
+  const stopListening = async () => {
+    if (!listening) return
+    setListening(false)
+    setPartial('')
+
+    // — Recognition path —
+    const held = heldRef.current
+    if (held) {
+      heldRef.current = null
+      const said = await held.stop()
+      if (said.trim()) {
+        await send({ text: said, display: said })
+        return
+      }
+      // Nothing came back. Safari hands us a recognizer that never delivers,
+      // so switch to recording from here on rather than blaming her.
+      if (canRecord) {
+        engineRef.current = 'record'
+        setError('Não ouvi nada. Toque no microfone e fale de novo.')
+      } else {
+        setError(micBlockedHint())
+      }
+      return
+    }
+
+    // — Recording path (server transcribes) —
+    const rec = recorderRef.current
+    recorderRef.current = null
+    if (!rec) return // nothing was capturing (a second stop racing the first)
+    const clip = await rec.stop()
+    if (clip) {
+      void send({ audioBase64: await blobToBase64(clip.blob), audioMime: clip.mime })
+    } else {
+      setError('Não ouvi nada. Toque no microfone e fale de novo.')
+    }
+  }
+
+  // The onEnd callback above runs from a closure created when the capture
+  // started; this ref keeps it pointing at the *current* stopListening.
+  const stopRef = useRef<() => Promise<void>>(async () => {})
+  useEffect(() => {
+    stopRef.current = stopListening
+  })
+
+  const onMic = () => {
+    if (listening) void stopListening()
+    else void startListening()
+  }
 
   // — "Modo espelho" —
 
@@ -375,7 +434,9 @@ export function ConversationPage() {
           <button
             key={s.id}
             onClick={() => selectScenario(s.id)}
-            disabled={busy}
+            // Also blocked while the mic is open — switching then would wipe
+            // the conversation and land the capture in the new scenario.
+            disabled={busy || listening}
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
               s.id === scenarioId ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
             }`}
@@ -447,8 +508,8 @@ export function ConversationPage() {
         <button
           onClick={onMic}
           disabled={busy}
-          title={listening ? 'Ouvindo…' : 'Falar'}
-          aria-label={listening ? 'Ouvindo…' : 'Falar'}
+          title={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
+          aria-label={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
           className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${
             listening ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
           }`}
@@ -456,10 +517,14 @@ export function ConversationPage() {
           <Mic size={20} className={listening ? 'animate-pulse' : ''} />
         </button>
         <input
-          value={text}
+          value={listening ? partial : text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendText()}
-          placeholder={listening ? 'ouvindo… fale agora' : `ou escreva em ${langName}…`}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && sendText()}
+          placeholder={
+            listening
+              ? 'ouvindo… fale sem pressa e toque no microfone quando terminar'
+              : `ou escreva em ${langName}…`
+          }
           disabled={listening || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"
         />

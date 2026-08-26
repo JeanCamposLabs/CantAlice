@@ -112,11 +112,15 @@ const MAX_AUDIO_B64_CHARS = 8_000_000 // ~6 MB decoded ≈ minutes of voice
 
 /** Whisper needs a filename whose extension matches the container. */
 const MIME_EXT: Record<string, string> = {
+  'audio/aac': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/mp3': 'mp3',
   'audio/mp4': 'mp4',
   'audio/mpeg': 'mp3',
   'audio/ogg': 'ogg',
   'audio/wav': 'wav',
   'audio/webm': 'webm',
+  'audio/x-m4a': 'm4a',
 }
 
 /** Transcribe a spoken clip in the target language with OpenAI Whisper. */
@@ -148,8 +152,31 @@ function scenarioClause(scenario: string | null): string {
   )
 }
 
+/**
+ * Pull one JSON string field out of (possibly truncated) model output — the
+ * closing quote/brace may be missing when the answer hit the token limit.
+ */
+function extractField(raw: string, key: string): string | null {
+  const m = raw.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`))
+  if (!m) return null
+  try {
+    return (JSON.parse(`"${m[1]}"`) as string).trim()
+  } catch {
+    return m[1].trim()
+  }
+}
+
 /** Ask Claude for one JSON object, tolerating any stray text around it. */
-async function askClaude(system: string, messages: Turn[]): Promise<Record<string, string>> {
+async function askClaude(
+  system: string,
+  messages: Turn[],
+  maxTokens = 500,
+): Promise<Record<string, string>> {
+  // The API requires the first message to be from the user; a trimmed history
+  // window can start with an assistant turn, so drop any leading ones.
+  const msgs = [...messages]
+  while (msgs.length && msgs[0].role !== 'user') msgs.shift()
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -157,7 +184,7 @@ async function askClaude(system: string, messages: Turn[]): Promise<Record<strin
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ model: CHAT_MODEL, max_tokens: 400, system, messages }),
+    body: JSON.stringify({ model: CHAT_MODEL, max_tokens: maxTokens, system, messages: msgs }),
   })
   await ensureOk(res, 'anthropic')
   const data = (await res.json()) as { content?: { text?: string }[] }
@@ -169,7 +196,15 @@ async function askClaude(system: string, messages: Turn[]): Promise<Record<strin
     for (const [k, v] of Object.entries(parsed)) out[k] = typeof v === 'string' ? v.trim() : ''
     return out
   } catch {
-    // Not JSON after all — treat the whole answer as the main field.
+    // Not valid JSON — usually a truncated answer. Salvage the fields we know
+    // about rather than showing raw JSON to the learner.
+    const out: Record<string, string> = {}
+    for (const k of ['reply', 'say', 'tip', 'note', 'pt']) {
+      const v = extractField(raw, k)
+      if (v !== null) out[k] = v
+    }
+    if (Object.keys(out).length) return out
+    // No JSON at all — treat the whole answer as the main field.
     return { _raw: raw.trim() }
   }
 }
@@ -205,7 +240,9 @@ async function chat(
     ` No markdown, JSON only.`
 
   const messages = [...history.slice(-12), { role: 'user' as const, content: userText }]
-  const parsed = await askClaude(system, messages)
+  // With `explain` the answer carries a full translation too — give it room so
+  // the JSON doesn't get truncated mid-string.
+  const parsed = await askClaude(system, messages, explain ? 700 : 500)
   return {
     reply: parsed.reply || parsed._raw || '',
     tip: parsed.tip ?? '',
@@ -247,6 +284,11 @@ async function sayIt(
   return { reply: parsed.say || parsed._raw || '', tip: parsed.note ?? '', pt: '' }
 }
 
+/** The OpenAI TTS voices we accept from the client; anything else → nova. */
+const TTS_VOICES = new Set([
+  'alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer',
+])
+
 /** Synthesize the reply to natural speech (mp3, base64) with OpenAI TTS. */
 async function speak(text: string, voice: string): Promise<string | null> {
   try {
@@ -255,7 +297,7 @@ async function speak(text: string, voice: string): Promise<string | null> {
       headers: { Authorization: `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'tts-1',
-        voice: voice || 'nova',
+        voice: TTS_VOICES.has(voice) ? voice : 'nova',
         input: text,
         response_format: 'mp3',
       }),
@@ -332,13 +374,15 @@ Deno.serve(async (req: Request) => {
       const heard = sayMode ? BASE_WHISPER : cfg.whisper
       userText = await transcribe(body.audio, body.audioMime ?? 'audio/webm', heard)
     }
-    if (!userText) return json({ error: 'empty input' }, 400)
 
     // "hear" stops here: the app only wants to know what was said, so it can
     // score the repetition itself. No Claude, no TTS — nothing else to pay for.
+    // Silence is a valid answer ('' transcript), not an error — the app shows
+    // its own "não ouvi nada" hint.
     if (hearMode) {
       return json({ transcript: userText, reply: '', tip: '', translation: '', audio: null })
     }
+    if (!userText) return json({ error: 'empty input' }, 400)
 
     // 2) Either coach the learner's next line, or reply as the tutor.
     const out = sayMode

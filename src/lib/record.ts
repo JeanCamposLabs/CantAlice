@@ -35,6 +35,16 @@ export function isIosWebApp(): boolean {
   return isApple && Boolean(standalone)
 }
 
+/**
+ * The right "mic is blocked" advice for this device. Shared by the composers
+ * so the iPhone/iPad home-screen case always gets the workaround that works.
+ */
+export function micBlockedHint(): string {
+  return isIosWebApp()
+    ? 'O microfone está bloqueado. No iPhone/iPad, o app instalado na tela de início às vezes não recebe o microfone — abra o site pelo Safari e toque em "Permitir".'
+    : 'Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.'
+}
+
 export interface Recorder {
   /** Stop and resolve with the clip, or null if nothing was captured. */
   stop: () => Promise<Clip | null>

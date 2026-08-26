@@ -394,7 +394,11 @@ function WordOfDay({ words }: { words: VocabWord[] }) {
 // — "Songs at your level" / discovery row —
 function Recommendations({ songs }: { songs: SavedSong[] }) {
   const [tracks, setTracks] = useState<SpotifyTrack[] | null>(null)
-  const sig = songs.map((s) => s.id).join(',')
+  const lang = useLang()
+  // The language is part of the signature: with no saved songs in either
+  // language the id list is identical (''), and without it a language switch
+  // would keep showing recommendations for the previous language.
+  const sig = lang.code + '|' + songs.map((s) => s.id).join(',')
 
   useEffect(() => {
     let alive = true

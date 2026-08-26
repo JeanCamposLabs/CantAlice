@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Check } from 'lucide-react'
 import { canSpeak, speak } from '../lib/speak'
 import { canListen, listenHeld, scorePronunciation, type HeldListen, type PronScore } from '../lib/listen'
-import { playBase64Mp3, blobToBase64 } from '../lib/converse'
-import { canRecord, isIosWebApp, startRecording, type Recorder } from '../lib/record'
+import { blobToBase64 } from '../lib/converse'
+import { playBase64Mp3 } from '../lib/audio'
+import { canRecord, micBlockedHint, startRecording, type Recorder } from '../lib/record'
 
 /** What the learner wants to say, in Portuguese — typed or spoken. */
 export interface MirrorIntent {
@@ -46,10 +47,6 @@ type Step =
 
 /** Which half of the flow the mic is open for. */
 type Capturing = 'pt' | 'target' | null
-
-const MIC_BLOCKED_HINT = isIosWebApp()
-  ? 'O microfone está bloqueado. No iPhone/iPad, o app instalado na tela de início às vezes não recebe o microfone — abra o site pelo Safari e toque em "Permitir".'
-  : 'Microfone bloqueado. No iPad: Ajustes → Safari → Sites → Microfone → Permitir.'
 
 /**
  * "Modo espelho" — the Alice flow: she says in Portuguese what she wants to
@@ -128,8 +125,10 @@ export function MirrorComposer({
   }
 
   const deliverRef = useRef(deliver)
+  const finishRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => {
     deliverRef.current = deliver
+    finishRef.current = finishCapture
   })
 
   // Repeated it well? Let the conversation move on by itself — that's the flow
@@ -171,11 +170,18 @@ export function MirrorComposer({
     setPartial('')
 
     if (engineRef.current === 'speech') {
-      heldRef.current = listenHeld({
+      const held = listenHeld({
         lang: which === 'pt' ? PT_LOCALE : undefined,
         maxMs: MAX_LISTEN_MS,
         onPartial: (t) => aliveRef.current && setPartial(t),
+        // The hold died on its own (watchdog / mic error): close the capture
+        // as if she tapped "Pronto", so the screen never shows a live mic
+        // that is actually dead.
+        onEnd: () => {
+          if (aliveRef.current && heldRef.current === held) void finishRef.current()
+        },
       })
+      heldRef.current = held
       setCapturing(which)
       return
     }
@@ -196,7 +202,7 @@ export function MirrorComposer({
       }
       setCapturing(which)
     } catch {
-      setHint(MIC_BLOCKED_HINT)
+      setHint(micBlockedHint())
     }
   }
 
@@ -224,7 +230,7 @@ export function MirrorComposer({
         engineRef.current = 'record'
         setHint('Não ouvi nada. Toque no microfone e fale de novo.')
       } else {
-        setHint(MIC_BLOCKED_HINT)
+        setHint(micBlockedHint())
       }
       return
     }
@@ -232,7 +238,8 @@ export function MirrorComposer({
     // — Recording path (server transcribes) —
     const rec = recorderRef.current
     recorderRef.current = null
-    const clip = await rec?.stop()
+    if (!rec) return // nothing was capturing (a second stop racing the first)
+    const clip = await rec.stop()
     if (!aliveRef.current) return
     if (!clip) {
       setHint('Não ouvi nada. Toque no microfone e fale de novo.')
@@ -456,7 +463,7 @@ export function MirrorComposer({
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendTyped()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && sendTyped()}
           placeholder="diga em português o que quer falar…"
           disabled={thinking || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"

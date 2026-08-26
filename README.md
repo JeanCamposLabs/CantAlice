@@ -21,7 +21,7 @@ no caderninho de vocabulário.
 - **Frases úteis** — frases do dia a dia e as suas próprias, com tradução e prática de pronúncia no microfone.
 - **Tradutor com exemplos reais** — traduza palavras e frases e veja exemplos bilíngues (estilo Reverso) para guardar na revisão.
 - **Conversar com IA** — um parceiro de conversa por voz que ouve, responde e fala de volta (opcional).
-- **Modo espelho** — trave menos na conversação: você diz em português o que quer falar, a IA mostra e fala a frase no idioma que você estuda, você repete (com nota de pronúncia) e só então ela entra na conversa — que segue com tradução embaixo de cada resposta. O microfone fica aberto até você tocar em **Pronto**, então dá para pensar no meio da frase sem ser cortada.
+- **Modo espelho** — trave menos na conversação: você diz em português o que quer falar, a IA mostra e fala a frase no idioma que você estuda, você repete (com nota de pronúncia) e só então ela entra na conversa — que segue com tradução embaixo de cada resposta. Nos dois modos o microfone fica aberto até você mandar (**Pronto** no espelho; tocar de novo no microfone no direto), então dá para pensar no meio da frase sem ser cortada.
 - **Inglês ou espanhol** — cada pessoa escolhe o idioma que quer aprender.
 - **Minhas músicas** — duas coleções: *Quero aprender* e *Já sei cantar*.
 - **Acompanhe o progresso** — quantas músicas, quantas palavras, e continue de onde parou.
@@ -32,16 +32,20 @@ no caderninho de vocabulário.
 - **Ajuda &amp; dicas** — um guia rápido dentro do app (botão de ajuda), com reconectar Spotify e "Atualizar agora".
 
 A biblioteca da Alice fica salva **no próprio navegador** dela (localStorage) — sem
-contas, sem servidor, privado.
+contas, sem servidor, privado. (Opcionalmente, dá para ligar a **sincronização
+na nuvem** — veja a seção mais abaixo — para o progresso acompanhar entre
+aparelhos.)
 
 > 📱 **Instalar na tela de início (iPhone/iPad):** abra o site no Safari → botão de
 > compartilhar → *Adicionar à Tela de Início*. Vira um app de verdade, em tela cheia.
 
 ## 🧰 Tecnologia
 
-React 19 · TypeScript · Vite · Tailwind CSS v4 · Framer Motion · Zustand · Spotify Web API + Web Playback SDK · [LRClib](https://lrclib.net) (letras) · MyMemory (tradução).
+React 19 · TypeScript · Vite · Tailwind CSS v4 · Framer Motion · Zustand · Spotify Web API + Web Playback SDK · [LRClib](https://lrclib.net) (letras) · Google Translate / DeepL / MyMemory (tradução).
 
-Tudo roda **100% no navegador** — perfeito para o GitHub Pages.
+O site é **100% estático** — perfeito para o GitHub Pages. Os recursos
+opcionais (sincronização, tradutor premium e conversa por IA) usam Edge
+Functions do Supabase, também sem servidor próprio.
 
 ---
 
@@ -188,13 +192,16 @@ A aba tem dois modos, atendidos pela mesma função:
   no microfone e ganha a nota por palavra. Repetiu bem? A frase entra sozinha na
   conversa — e a resposta do tutor vem com a tradução em português embaixo.
 
-**Microfone:** o reconhecimento do navegador roda em modo contínuo e só fecha
-quando a pessoa toca em **Pronto** — pausar no meio da frase não corta mais a
-fala. Onde o navegador se recusa a escutar (caso clássico: app instalado na tela
-de início do iPhone/iPad, onde o Safari expõe a API mas não deixa usar), o app
-grava e manda para a função transcrever (`mode: 'hear'` — só Whisper, sem Claude
-nem TTS). Se nem gravar der, ela ainda pode escrever em português e ler a frase
-em voz alta antes de enviar.
+**Microfone:** nos dois modos o reconhecimento do navegador roda em modo
+contínuo e só fecha quando a pessoa manda — tocando em **Pronto** (espelho) ou
+tocando de novo no microfone (direto). Pausar no meio da frase não corta a
+fala: se o navegador encerrar a sessão no silêncio (o Chrome faz isso), o app
+guarda o que já ouviu e reabre o microfone sozinho. Onde o navegador se recusa
+a escutar (caso clássico: app instalado na tela de início do iPhone/iPad, onde
+o Safari expõe a API mas não deixa usar), o app grava e manda para a função
+transcrever (`mode: 'hear'` — só Whisper, sem Claude nem TTS). Se nem gravar
+der, ela ainda pode escrever em português e ler a frase em voz alta antes de
+enviar.
 
 > Se você já tinha a função publicada, **republique a `converse`** para o modo
 > espelho funcionar (o app continua funcionando no modo direto sem isso).
@@ -217,6 +224,8 @@ em voz alta antes de enviar.
      Compartilhar → Copiar link**, em `open.spotify.com/user/<ID>`.
    - Se a variável ficar vazia, qualquer usuário logado é aceito (confiando no
      Development mode). Quem não está na lista recebe `403`.
+   - A mesma lista também vale para a função `translate` (que gasta cota de
+     DeepL/Claude) — um secret só protege as duas.
    - Sem créditos de IA, a aba avisa para falar com o responsável.
 
 ### 🚀 Deploy automático das funções

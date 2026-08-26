@@ -82,23 +82,26 @@ export function WordPopover({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Position: centered above the word, clamped to the viewport.
+  // Position: centered on the word, clamped to the viewport — above it when
+  // there's room, below it when the word sits near the top of the screen (the
+  // card would otherwise be clipped off-screen).
   const width = 280
   const left = Math.min(
     Math.max(12, selection.rect.left + selection.rect.width / 2 - width / 2),
     window.innerWidth - width - 12,
   )
-  const top = selection.rect.top - 12
+  const below = selection.rect.top < 340
+  const top = below ? selection.rect.bottom + 12 : selection.rect.top - 12
 
   return createPortal(
     <>
       {/* Click-away layer */}
       <div className="fixed inset-0 z-50" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+        initial={{ opacity: 0, y: below ? -8 : 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-strong fixed z-50 -translate-y-full rounded-2xl p-4 shadow-2xl"
+        className={`glass-strong fixed z-50 rounded-2xl p-4 shadow-2xl ${below ? '' : '-translate-y-full'}`}
         style={{ left, top, width }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -175,13 +178,22 @@ export function WordPopover({
           )}
         </button>
 
-        {/* Little pointer */}
+        {/* Little pointer, on whichever edge faces the word */}
         <span
-          className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45"
+          className={`absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 ${
+            below ? '-top-1.5' : '-bottom-1.5'
+          }`}
           style={{
             background: 'color-mix(in oklab, var(--color-night-700) 78%, transparent)',
-            borderRight: '1px solid rgba(255,255,255,0.12)',
-            borderBottom: '1px solid rgba(255,255,255,0.12)',
+            ...(below
+              ? {
+                  borderLeft: '1px solid rgba(255,255,255,0.12)',
+                  borderTop: '1px solid rgba(255,255,255,0.12)',
+                }
+              : {
+                  borderRight: '1px solid rgba(255,255,255,0.12)',
+                  borderBottom: '1px solid rgba(255,255,255,0.12)',
+                }),
           }}
         />
       </motion.div>

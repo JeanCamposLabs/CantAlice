@@ -19,7 +19,9 @@ const LS = {
 
 // — PKCE helpers —
 function randomString(length: number): string {
-  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
+  // 64 characters (all PKCE-legal) so `byte % 64` is perfectly uniform —
+  // a longer alphabet would give the first characters a modulo bias.
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
   const values = crypto.getRandomValues(new Uint8Array(length))
   return Array.from(values, (v) => possible[v % possible.length]).join('')
 }

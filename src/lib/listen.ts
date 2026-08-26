@@ -298,12 +298,18 @@ export interface PronScore {
 
 /** Score what was heard against the target phrase, word by word (fuzzy). */
 export function scorePronunciation(target: string, heard: string): PronScore {
-  const t = words(target)
+  // The chips shown to the learner keep their accents ("cómo"); only the
+  // comparison is folded, so accent differences never mark a word wrong.
+  const display = target
+    .toLowerCase()
+    .replace(/[^\p{L}'\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
   const h = words(heard)
-  const breakdown = t.map((w) => ({
-    word: w,
-    ok: h.some((x) => x === w || similarity(x, w) >= 0.8),
-  }))
-  const ok = breakdown.filter((w) => w.ok).length
-  return { ratio: t.length ? ok / t.length : 0, words: breakdown }
+  const breakdown = display.map((orig) => {
+    const w = fold(orig).replace(/[^a-z']/g, '')
+    return { word: orig, ok: w.length > 0 && h.some((x) => x === w || similarity(x, w) >= 0.8) }
+  })
+  const ok = breakdown.filter((b) => b.ok).length
+  return { ratio: breakdown.length ? ok / breakdown.length : 0, words: breakdown }
 }

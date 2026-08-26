@@ -457,7 +457,7 @@ export function ConversationPage() {
           <TemplateDialogPanel
             dialog={templateDialog}
             onStart={() => startScenario(scenarioId)}
-            busy={busy}
+            busy={busy || listening}
           />
         ) : !conversationActive ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-mist/50">
@@ -465,7 +465,9 @@ export function ConversationPage() {
             <p>Escolha uma situação acima, ou toque no microfone e diga “{lang.hello}”.</p>
             <button
               onClick={() => startScenario(scenarioId)}
-              disabled={busy}
+              // Also blocked while the mic is open — a kickoff arriving while
+              // the capture is still going would interleave two turns.
+              disabled={busy || listening}
               className="mt-1 flex items-center gap-2 rounded-full bg-rose-400/20 px-5 py-2 text-sm text-rose-100 transition-colors hover:bg-rose-400/30 disabled:opacity-50"
             >
               <Play size={14} /> Começar conversa
@@ -508,6 +510,7 @@ export function ConversationPage() {
         <button
           onClick={onMic}
           disabled={busy}
+          aria-pressed={listening}
           title={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
           aria-label={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
           className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${

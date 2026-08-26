@@ -291,6 +291,7 @@ const TTS_VOICES = new Set([
 
 /** Synthesize the reply to natural speech (mp3, base64) with OpenAI TTS. */
 async function speak(text: string, voice: string): Promise<string | null> {
+  if (!text.trim()) return null
   try {
     const res = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',

@@ -301,3 +301,7 @@ supabase/              # schema SQL + Edge Functions (progress, translate, conve
 ---
 
 Feito com 💛 para a Alice cantar e aprender.
+
+> ⚠️ **Avisinho:** o **Juninho** passou por aqui e fez umas mudanças — auditoria
+> completa, uns bugs a menos, uns acentos a mais. Se algo aparecer diferente,
+> foi ele. 😄🎶

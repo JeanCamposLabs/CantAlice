@@ -129,6 +129,3 @@ export function blobToBase64(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
-
-// Playback of the returned audio lives in lib/audio (one voice at a time).
-export { playBase64Mp3 } from './audio'

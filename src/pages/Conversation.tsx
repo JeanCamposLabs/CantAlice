@@ -214,7 +214,9 @@ export function ConversationPage() {
 
   const sendText = () => {
     const t = text.trim()
-    if (!t || busy) return
+    // Not while the mic is open: the input is showing the live partial then,
+    // and sending the older typed text would race the capture.
+    if (!t || busy || listening) return
     setText('')
     void send({ text: t, display: t })
   }
@@ -488,7 +490,7 @@ export function ConversationPage() {
         />
         <button
           onClick={sendText}
-          disabled={busy || !text.trim()}
+          disabled={busy || listening || !text.trim()}
           aria-label="Enviar"
           className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/8 text-cream hover:bg-white/15 disabled:opacity-40"
         >

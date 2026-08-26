@@ -24,6 +24,13 @@ export const NOTHING_HEARD_HINT = 'Não ouvi nada. Toque no microfone e fale de 
 // instead of failing one attempt each to relearn it.
 let sessionEngine: 'speech' | 'record' = canListen ? 'speech' : 'record'
 
+// Whether recognition has ever delivered text this session. An empty capture
+// only downgrades the engine while this is false: silence from a proven
+// recognizer means the speaker said nothing, not that the engine is broken
+// (the broken case — Safari on an installed iPhone/iPad app — never delivers
+// anything at all).
+let speechDelivered = false
+
 /** What came out of a capture. */
 export type CaptureResult =
   | { kind: 'text'; text: string }
@@ -86,6 +93,7 @@ export function useMicCapture(maxMs = 60_000): MicCapture {
   }, [])
 
   const stop = async (): Promise<CaptureResult> => {
+    const wasOpening = openingRef.current
     epochRef.current++
     autoStopRef.current = null
     setCapturing(false)
@@ -96,20 +104,28 @@ export function useMicCapture(maxMs = 60_000): MicCapture {
     if (held) {
       heldRef.current = null
       const said = (await held.stop()).trim()
-      if (said) return { kind: 'text', text: said }
-      // Nothing came back. Switch to recording from here on rather than
-      // blaming the speaker.
-      if (canRecord) {
+      if (said) {
+        speechDelivered = true
+        return { kind: 'text', text: said }
+      }
+      // Nothing came back. If this recognizer has never delivered anything,
+      // assume it's the broken kind and record from here on; if it has, this
+      // was just silence — don't take the working engine away.
+      if (canRecord && !speechDelivered) {
         sessionEngine = 'record'
         return { kind: 'empty', blocked: false }
       }
-      return { kind: 'empty', blocked: true }
+      return { kind: 'empty', blocked: !speechDelivered && !canRecord }
     }
 
     // — Recording path (the server transcribes the clip) —
     const rec = recorderRef.current
     recorderRef.current = null
-    if (!rec) return { kind: 'noop' }
+    if (!rec) {
+      // A tap-to-send while the permission prompt was still up: the pending
+      // start releases the mic, and the tap deserves a hint, not silence.
+      return wasOpening ? { kind: 'empty', blocked: false } : { kind: 'noop' }
+    }
     const clip = await rec.stop()
     if (!clip) return { kind: 'empty', blocked: false }
     return { kind: 'clip', blob: clip.blob, mime: clip.mime }
@@ -133,7 +149,10 @@ export function useMicCapture(maxMs = 60_000): MicCapture {
       const held = listenHeld({
         lang: opts.lang,
         maxMs,
-        onPartial: (t) => aliveRef.current && setPartial(t),
+        onPartial: (t) => {
+          if (t) speechDelivered = true
+          if (aliveRef.current) setPartial(t)
+        },
         // The hold died on its own (watchdog / mic error): close the capture
         // as if the speaker had stopped it, so the screen never shows a live
         // mic that is actually dead.

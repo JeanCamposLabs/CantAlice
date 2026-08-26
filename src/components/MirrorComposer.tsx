@@ -144,13 +144,15 @@ export function MirrorComposer({
   })
 
   // Repeated it well? Let the conversation move on by itself — that's the flow
-  // Alice asked for ("e assim seguimos a conversa").
+  // Alice asked for ("e assim seguimos a conversa"). Held while the mic is
+  // open: a "Repetir" attempt must not have the phrase sent (and the step
+  // reset) out from under it, which would orphan a live mic with no controls.
   useEffect(() => {
-    if (step.kind !== 'repeat' || !step.score || step.score.ratio < GOOD_ENOUGH) return
+    if (step.kind !== 'repeat' || !step.score || step.score.ratio < GOOD_ENOUGH || micOpen) return
     const phrase = step.phrase
     const timer = setTimeout(() => void deliverRef.current(phrase), AUTO_SEND_MS)
     return () => clearTimeout(timer)
-  }, [step])
+  }, [step, micOpen])
 
   const playPhrase = (phrase: MirrorPhrase) => {
     if (phrase.audio) void playBase64Mp3(phrase.audio)

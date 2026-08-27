@@ -2,7 +2,8 @@ import { speak, canSpeak } from '../lib/speak'
 
 // Word tokens (incl. contractions like "don't"); everything else — spaces and
 // punctuation — is kept verbatim between them so the phrase reads normally.
-const WORD_RE = /([A-Za-z]+(?:'[A-Za-z]+)?)/
+// Unicode-aware so accented words ("está", "café") stay whole and tappable.
+const WORD_RE = /(\p{L}+(?:'\p{L}+)?)/u
 
 /**
  * Render an English phrase where every word is tappable to hear just that word
@@ -19,7 +20,9 @@ export function SpeakableText({
   className?: string
 }) {
   const head = highlight?.trim().split(/\s+/)[0] ?? ''
-  const hl = head ? new RegExp(`^${head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*$`, 'i') : null
+  const hl = head
+    ? new RegExp(`^${head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\p{L}*$`, 'iu')
+    : null
 
   return (
     <span className={className}>

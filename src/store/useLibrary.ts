@@ -91,7 +91,6 @@ interface LibraryState {
   removeSong: (id: string) => void
   setStatus: (id: string, status: SongStatus) => void
   markPracticed: (id: string) => void
-  songStatus: (id: string) => SongStatus | null
 
   // — vocab actions —
   addWord: (
@@ -120,7 +119,6 @@ interface LibraryState {
   removeCustomPhrase: (lang: TargetLang, id: string) => void
 
   // — preferences —
-  setOnboarded: (v: boolean) => void
   toggleTranslations: () => void
   toggleLargeLyrics: () => void
   markWordHintSeen: () => void
@@ -170,7 +168,10 @@ function trackToSong(track: SpotifyTrack, status: SongStatus, lang: TargetLang):
   }
 }
 
-const normWord = (w: string) => w.toLowerCase().replace(/[^a-zà-ÿ'-]/gi, '')
+// The à-ö/ø-ÿ split skips U+00F7 (÷), the one non-letter in Latin-1's à-ÿ run.
+// Deliberately conservative: these keys index the saved vocabulary, so the
+// mapping must stay stable for every word already stored.
+const normWord = (w: string) => w.toLowerCase().replace(/[^a-zà-öø-ÿ'-]/gi, '')
 
 export const useLibrary = create<LibraryState>()(
   persist(
@@ -235,8 +236,6 @@ export const useLibrary = create<LibraryState>()(
               : s.songs,
           }
         }),
-
-      songStatus: (id) => get().songs[id]?.status ?? null,
 
       addWord: (word, translation, songName, example) => {
         const key = normWord(word)
@@ -344,7 +343,14 @@ export const useLibrary = create<LibraryState>()(
       addCustomPhrase: (lang, target, pt) =>
         set((s) => {
           const existing = s.customPhrases[lang] ?? []
-          const phrase: CustomPhrase = { id: `${Date.now()}`, target, pt, addedAt: Date.now() }
+          // The id doubles as the cross-device merge key, so make it unique
+          // even for two phrases created in the same millisecond.
+          const phrase: CustomPhrase = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            target,
+            pt,
+            addedAt: Date.now(),
+          }
           return { customPhrases: { ...s.customPhrases, [lang]: [...existing, phrase] } }
         }),
 
@@ -356,7 +362,6 @@ export const useLibrary = create<LibraryState>()(
           },
         })),
 
-      setOnboarded: (v) => set({ hasOnboarded: v }),
       toggleTranslations: () => set((s) => ({ showTranslations: !s.showTranslations })),
       toggleLargeLyrics: () => set((s) => ({ largeLyrics: !s.largeLyrics })),
       markWordHintSeen: () => set({ wordHintSeen: true }),
@@ -426,19 +431,12 @@ export function selectDailyProgress(state: LibraryState): {
   return { done, goal, met: done >= goal }
 }
 
-/** Cards reviewed on each of the last `days` calendar days (oldest first). */
-export function selectActivity(
-  state: LibraryState,
-  days = 14,
-): { date: string; label: string; count: number }[] {
-  return buildActivity(state.history ?? {}, days)
-}
-
 /**
- * Pure builder for the activity chart. Kept separate from the selector so
- * callers can memoize on the stable `history` reference — selecting the freshly
- * built array directly would return a new reference every render and, under
- * useSyncExternalStore, loop ("getSnapshot should be cached").
+ * Pure builder for the activity chart (cards reviewed on each of the last
+ * `days` calendar days, oldest first). A pure function rather than a selector
+ * so callers can memoize on the stable `history` reference — selecting the
+ * freshly built array directly would return a new reference every render and,
+ * under useSyncExternalStore, loop ("getSnapshot should be cached").
  */
 export function buildActivity(
   hist: Record<string, number>,

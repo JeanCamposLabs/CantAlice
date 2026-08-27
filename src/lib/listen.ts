@@ -118,22 +118,34 @@ export interface HeldListen {
  * finding the words — the beginner it's meant to help. Here recognition runs
  * in continuous mode, partial results stream back through `onPartial` so the
  * screen can show it's still listening, and the phrase is only complete when
- * the speaker taps "pronto".
+ * the speaker taps "pronto". Chrome ends the session on a long silence even in
+ * continuous mode, so when that happens we bank what was heard and quietly
+ * start a fresh session — the mic really does stay open until "pronto".
  */
 export function listenHeld(opts: {
   lang?: string
   onPartial?: (text: string) => void
   /** Safety net so the mic can never stay on forever. */
   maxMs?: number
+  /**
+   * Called when listening ended on its own (watchdog or an unrecoverable
+   * error) rather than via stop()/cancel(), so the UI can close the capture
+   * instead of showing a live mic that is actually dead.
+   */
+  onEnd?: (text: string) => void
 }): HeldListen {
   const locale = opts.lang ?? langConfig().speech
   const Ctor = getCtor()
-  const finals: string[] = []
+  /** Final text banked from earlier recognition sessions (silence restarts). */
+  const committed: string[] = []
+  /** Final results of the current session. */
+  let finals: string[] = []
   let live = ''
   let settle: ((text: string) => void) | null = null
   let done = false
+  let stopping = false
 
-  const text = () => [...finals, live].join(' ').replace(/\s+/g, ' ').trim()
+  const text = () => [...committed, ...finals, live].join(' ').replace(/\s+/g, ' ').trim()
 
   if (!Ctor) {
     return { stop: async () => '', cancel: () => {} }
@@ -155,6 +167,7 @@ export function listenHeld(opts: {
       /* already stopped */
     }
     settle?.(text())
+    if (!stopping) opts.onEnd?.(text())
   }
 
   const watchdog = setTimeout(finish, opts.maxMs ?? 60_000)
@@ -172,15 +185,31 @@ export function listenHeld(opts: {
       if (r.isFinal) banked.push(said)
       else interim = said
     }
-    finals.length = 0
-    finals.push(...banked)
+    finals = banked
     live = interim
     opts.onPartial?.(text())
   }
-  // Chrome ends the session on a long silence even in continuous mode; keep
-  // what was heard rather than throwing it away.
-  rec.onend = () => finish()
-  rec.onerror = () => finish()
+  rec.onend = () => {
+    if (done) return
+    // The session ended on its own (Chrome does this after a long silence).
+    // Bank everything heard so far and restart, so nothing is lost and the
+    // mic keeps listening until the speaker taps "pronto".
+    if (finals.length || live) committed.push(...finals, ...(live ? [live] : []))
+    finals = []
+    live = ''
+    try {
+      rec.start()
+    } catch {
+      finish()
+    }
+  }
+  rec.onerror = (e) => {
+    // A quiet start ("no-speech") is not a failure here — onend follows and the
+    // restart above keeps the mic open while she finds the words. "aborted" is
+    // our own cancel(). Real errors (permission, audio, network) end the hold.
+    if (e.error === 'no-speech' || e.error === 'aborted') return
+    finish()
+  }
 
   try {
     rec.start()
@@ -197,6 +226,7 @@ export function listenHeld(opts: {
           return
         }
         settle = resolve
+        stopping = true
         finish()
       }),
     cancel: () => {
@@ -211,9 +241,24 @@ export function listenHeld(opts: {
   }
 }
 
-const words = (s: string): string[] =>
+/**
+ * Normalize for comparison: lowercase and folded to plain ASCII letters, so
+ * "está"/"esta" or "cómo"/"como" count as the same word. Recognition and the
+ * target phrase rarely agree on accents, and pronunciation practice should
+ * grade the sounds, not the spelling. NFD splits letters from their combining
+ * accents, which are then stripped. Shared with the review session's lenient
+ * answer check.
+ */
+export const foldForCompare = (s: string): string =>
   s
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+const fold = foldForCompare
+
+const words = (s: string): string[] =>
+  fold(s)
     .replace(/[^a-z'\s]/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
@@ -253,12 +298,18 @@ export interface PronScore {
 
 /** Score what was heard against the target phrase, word by word (fuzzy). */
 export function scorePronunciation(target: string, heard: string): PronScore {
-  const t = words(target)
+  // The chips shown to the learner keep their accents ("cómo"); only the
+  // comparison is folded, so accent differences never mark a word wrong.
+  const display = target
+    .toLowerCase()
+    .replace(/[^\p{L}'\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
   const h = words(heard)
-  const breakdown = t.map((w) => ({
-    word: w,
-    ok: h.some((x) => x === w || similarity(x, w) >= 0.8),
-  }))
-  const ok = breakdown.filter((w) => w.ok).length
-  return { ratio: t.length ? ok / t.length : 0, words: breakdown }
+  const breakdown = display.map((orig) => {
+    const w = fold(orig).replace(/[^a-z']/g, '')
+    return { word: orig, ok: w.length > 0 && h.some((x) => x === w || similarity(x, w) >= 0.8) }
+  })
+  const ok = breakdown.filter((b) => b.ok).length
+  return { ratio: breakdown.length ? ok / breakdown.length : 0, words: breakdown }
 }

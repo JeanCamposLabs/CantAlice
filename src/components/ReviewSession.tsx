@@ -5,18 +5,23 @@ import { useLibrary, selectReviewQueue, type ReviewItem, type VocabWord } from '
 import { previewIntervals, formatInterval, type Rating } from '../srs/fsrs'
 import { fetchExample, fetchExamples } from '../lyrics/examples'
 import { speak, canSpeak } from '../lib/speak'
-import { canListen, listenOnce } from '../lib/listen'
+import { canListen, listenOnce, foldForCompare } from '../lib/listen'
 import { SpeakableText } from './SpeakableText'
 import { useUI } from '../store/useUI'
 import { useLangName } from '../lib/useLangName'
 
 /** Blank out the target word in an example so it can be produced from context. */
 function cloze(text: string, word: string) {
-  const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*`, 'i')
-  return text.replace(re, '_____')
+  // A capture group instead of \b: the ASCII word boundary never matches
+  // before an accent-initial word ("árbol", "él"), which would leave the
+  // answer visible on the card.
+  const re = new RegExp(`(^|[^\\p{L}])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\p{L}*`, 'iu')
+  return text.replace(re, '$1_____')
 }
 
-const tokenize = (s: string): string[] => s.toLowerCase().match(/[a-z']+/g) ?? []
+// Accent-folded so "esta" counts for "está" — she is recalling the word, not
+// taking a spelling test (and the mic answer never comes back accented right).
+const tokenize = (s: string): string[] => foldForCompare(s).match(/[a-z']+/g) ?? []
 
 /**
  * Lenient answer check for the production card: the learner is "right" if what

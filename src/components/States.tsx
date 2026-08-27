@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { KeyRound, Music2, Wifi } from 'lucide-react'
+import { KeyRound, Music2 } from 'lucide-react'
 import { beginLogin } from '../spotify/auth'
 import { useUI } from '../store/useUI'
 
@@ -97,17 +97,6 @@ export function ConnectGate({ feature }: { feature: string }) {
           </button>
         </div>
       }
-    />
-  )
-}
-
-/** Generic network/loading-failed message. */
-export function ErrorState({ message }: { message: string }) {
-  return (
-    <EmptyState
-      icon={<Wifi size={34} />}
-      title="Algo deu errado"
-      description={message}
     />
   )
 }

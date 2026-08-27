@@ -319,7 +319,6 @@ const ES: Scenario[] = [
     blurb: 'Da mesa à conta, sem travar.',
     phrases: [
       { en: 'Una mesa para dos, por favor.', pt: 'Uma mesa para dois, por favor.' },
-
       { en: '¿Nos trae la carta?', pt: 'Pode trazer o cardápio?' },
       { en: '¿Cuál es el plato del día?', pt: 'Qual é o prato do dia?' },
       { en: 'Para mí el pollo, por favor.', pt: 'Para mim o frango, por favor.' },

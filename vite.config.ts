@@ -48,6 +48,19 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     target: 'es2020',
+    rollupOptions: {
+      output: {
+        // Split the stable vendor libraries out of the app chunk: app code
+        // changes every release, the libraries almost never do, so returning
+        // visitors re-download only the small app chunk.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('framer-motion')) return 'motion'
+          if (id.includes('lucide-react')) return 'icons'
+          return 'vendor' // react, react-dom, zustand, …
+        },
+      },
+    },
   },
 })
 

@@ -35,6 +35,15 @@ const DEEPL_KEY = Deno.env.get('DEEPL_API_KEY') ?? ''
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const CHAT_MODEL = 'claude-haiku-4-5-20251001'
 
+// Optional allowlist of Spotify user IDs (same variable the `converse`
+// function uses). This endpoint also spends paid quota (DeepL characters,
+// Claude-generated examples), so when the allowlist is configured it applies
+// here too. Empty → any logged-in Spotify user is accepted.
+const ALLOWED_USERS = (Deno.env.get('ALLOWED_SPOTIFY_USERS') ?? '')
+  .split(/[\s,]+/)
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+
 /**
  * Generate clean, learner-friendly example sentences with Claude. Used to top up
  * when the corpus is too thin or only has long/literary sentences (e.g. rare
@@ -166,11 +175,19 @@ async function tatoeba(
   }
 }
 
+// One merged set for both target languages — a stray cross-language hit only
+// affects similarity scoring, never correctness.
 const STOPWORDS = new Set([
+  // English
   'a', 'an', 'the', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
   'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did', 'will', 'would',
   'to', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'but', 'so', 'my', 'your', 'his', 'their',
   'this', 'that', 'these', 'those', 'not', 'no', 'as', 'with', 'from', 'by',
+  // Spanish
+  'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'yo', 'tú', 'tu', 'él', 'ella', 'ello',
+  'nosotros', 'vosotros', 'ellos', 'ellas', 'usted', 'es', 'son', 'era', 'eran', 'ser', 'estar',
+  'está', 'están', 'de', 'del', 'en', 'con', 'por', 'para', 'y', 'o', 'pero', 'mi', 'su', 'sus',
+  'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'eso', 'que', 'se', 'lo', 'le', 'les', 'al',
 ])
 
 /**
@@ -192,12 +209,19 @@ const SLANG = new Set([
 // hard drugs, self-harm, graphic violence) — NOT everyday words an adult learner
 // legitimately needs ("beer", "wine", "die", "hate"), which we deliberately keep.
 const UNSAFE = [
+  // English
   'rape', 'raped', 'raping', 'rapist', 'sex', 'sexual', 'sexy', 'porn', 'pornography',
   'naked', 'nude', 'nudity', 'penis', 'vagina', 'breast', 'breasts', 'orgasm', 'condom',
   'horny', 'whore', 'slut', 'molest', 'molested', 'pedophile',
   'fuck', 'fucked', 'fucking', 'shit', 'bitch', 'bastard', 'asshole', 'cunt', 'dick',
   'nigger', 'faggot', 'cocaine', 'heroin', 'meth', 'overdose', 'suicide', 'suicidal',
   'terrorist', 'behead', 'beheaded',
+  // Spanish (the corpus serves both target languages)
+  'violación', 'violacion', 'violar', 'violada', 'violador', 'sexo', 'porno', 'pornografía',
+  'desnudo', 'desnuda', 'pene', 'vagina', 'orgasmo', 'condón', 'condon', 'puta', 'puto',
+  'polla', 'coño', 'follar', 'follando', 'joder', 'mierda', 'gilipollas', 'cabrón', 'cabron',
+  'maricón', 'maricon', 'zorra', 'cocaína', 'cocaina', 'heroína', 'heroina', 'sobredosis',
+  'suicidio', 'suicida', 'terrorista', 'decapitado', 'decapitada',
 ]
 const UNSAFE_RE = new RegExp(`\\b(${UNSAFE.join('|')})\\b`, 'i')
 function isAppropriate(text: string): boolean {
@@ -206,7 +230,7 @@ function isAppropriate(text: string): boolean {
 
 /** The set of "content" words in a sentence, minus stopwords and the query stem. */
 function contentSig(text: string, head: string): Set<string> {
-  const words = (text.toLowerCase().match(/[a-z']+/g) ?? []).filter(
+  const words = (text.toLowerCase().match(/[\p{L}']+/gu) ?? []).filter(
     (w) => !STOPWORDS.has(w) && !(head.length >= 3 && w.startsWith(head)),
   )
   return new Set(words)
@@ -236,11 +260,11 @@ function selectVaried(
   // generated examples if this leaves too few), so we never show 30–90 word
   // literary excerpts.
   const sized = cands.filter((c) => {
-    const n = (c.text.match(/[A-Za-z']+/g) ?? []).length
+    const n = (c.text.match(/[\p{L}']+/gu) ?? []).length
     return n >= 3 && n <= 16
   })
   const enriched = sized.map((c) => {
-    const tokens = c.text.toLowerCase().match(/[a-z']+/g) ?? []
+    const tokens = c.text.toLowerCase().match(/[\p{L}']+/gu) ?? []
     const n = tokens.length
     const slang = tokens.filter((w) => SLANG.has(w)).length
     return {
@@ -277,6 +301,14 @@ Deno.serve(async (req: Request) => {
       headers: { Authorization: `Bearer ${spotifyToken}` },
     })
     if (!me.ok) return json({ error: 'invalid spotify token' }, 401)
+    // Enforce the members allowlist when configured (see ALLOWED_USERS above).
+    if (ALLOWED_USERS.length) {
+      const profile = (await me.json()) as { id?: string }
+      const id = (profile.id ?? '').toLowerCase()
+      if (!id || !ALLOWED_USERS.includes(id)) {
+        return json({ error: 'not_allowed' }, 403)
+      }
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       mode?: string

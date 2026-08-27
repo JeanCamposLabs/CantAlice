@@ -82,26 +82,39 @@ export function WordPopover({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Position: centered above the word, clamped to the viewport.
+  // Position: centered on the word, clamped to the viewport. Prefer above the
+  // word (it doesn't cover the next lyric line); go below when the space above
+  // can't fit a typical card and below has more room. Whichever side, the card
+  // is capped to the available space and scrolls inside itself, so it can
+  // never be clipped off-screen — not even on a short landscape viewport.
   const width = 280
   const left = Math.min(
     Math.max(12, selection.rect.left + selection.rect.width / 2 - width / 2),
     window.innerWidth - width - 12,
   )
-  const top = selection.rect.top - 12
+  const spaceAbove = selection.rect.top - 16
+  const spaceBelow = window.innerHeight - selection.rect.bottom - 16
+  const below = spaceAbove < 340 && spaceBelow > spaceAbove
+  // Exactly the room the chosen side has — a floor here would push the card
+  // back off-screen on a short landscape viewport.
+  const maxHeight = below ? spaceBelow : spaceAbove
+  const top = below ? selection.rect.bottom + 12 : selection.rect.top - 12
 
   return createPortal(
     <>
       {/* Click-away layer */}
       <div className="fixed inset-0 z-50" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+        initial={{ opacity: 0, y: below ? -8 : 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-strong fixed z-50 -translate-y-full rounded-2xl p-4 shadow-2xl"
+        className={`glass-strong fixed z-50 rounded-2xl shadow-2xl ${below ? '' : '-translate-y-full'}`}
         style={{ left, top, width }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* The scroll lives on an inner wrapper so the pointer below, which
+            sticks out of the card, is never clipped by the overflow. */}
+        <div className="overflow-y-auto p-4" style={{ maxHeight }}>
         <div className="text-xs uppercase tracking-[0.18em] text-mist/50">{langLabel}</div>
         <div className="flex items-center gap-2">
           <span className="font-display text-2xl text-cream">{cleanWord}</span>
@@ -174,14 +187,24 @@ export function WordPopover({
             </>
           )}
         </button>
+        </div>
 
-        {/* Little pointer */}
+        {/* Little pointer, on whichever edge faces the word */}
         <span
-          className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45"
+          className={`absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 ${
+            below ? '-top-1.5' : '-bottom-1.5'
+          }`}
           style={{
             background: 'color-mix(in oklab, var(--color-night-700) 78%, transparent)',
-            borderRight: '1px solid rgba(255,255,255,0.12)',
-            borderBottom: '1px solid rgba(255,255,255,0.12)',
+            ...(below
+              ? {
+                  borderLeft: '1px solid rgba(255,255,255,0.12)',
+                  borderTop: '1px solid rgba(255,255,255,0.12)',
+                }
+              : {
+                  borderRight: '1px solid rgba(255,255,255,0.12)',
+                  borderBottom: '1px solid rgba(255,255,255,0.12)',
+                }),
           }}
         />
       </motion.div>

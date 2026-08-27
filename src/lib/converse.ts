@@ -66,9 +66,11 @@ export async function converse(input: {
   const token = await getValidAccessToken()
   if (!token) throw new ConverseError('unauthorized')
 
-  // Don't let a turn hang forever — fail fast with a clear message.
+  // Don't let a turn hang forever — fail fast with a clear message. Audio
+  // turns get longer: uploading a clip on a slow connection plus Whisper,
+  // Claude and TTS can legitimately take a while.
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 30000)
+  const timer = setTimeout(() => controller.abort(), input.audioBase64 ? 75_000 : 40_000)
 
   let res: Response
   try {
@@ -125,15 +127,5 @@ export function blobToBase64(blob: Blob): Promise<string> {
     }
     reader.onerror = reject
     reader.readAsDataURL(blob)
-  })
-}
-
-/** Play a base64 mp3 returned by the function. Resolves when playback ends. */
-export function playBase64Mp3(b64: string): Promise<void> {
-  return new Promise((resolve) => {
-    const audio = new Audio(`data:audio/mp3;base64,${b64}`)
-    audio.onended = () => resolve()
-    audio.onerror = () => resolve()
-    void audio.play().catch(() => resolve())
   })
 }

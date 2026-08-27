@@ -4,14 +4,14 @@ import { Mic, Send, Loader2, Volume2, Lightbulb, Music2, RotateCcw, BookOpen, Pl
 import { useSession } from '../store/useSession'
 import { beginLogin } from '../spotify/auth'
 import { speak, canSpeak } from '../lib/speak'
-import { canListen, listenOnce } from '../lib/listen'
-import { startRecording, type Recorder } from '../lib/record'
+import { micBlockedHint } from '../lib/record'
 import { useLang } from '../lib/useLangName'
 import { applyUpdate } from '../hooks/useAppUpdate'
+import { useMicCapture, NOTHING_HEARD_HINT, type CaptureResult } from '../hooks/useMicCapture'
+import { playBase64Mp3 } from '../lib/audio'
 import {
   converse,
   blobToBase64,
-  playBase64Mp3,
   ConverseError,
   IS_CONVERSE_CONFIGURED,
   type ConverseResult,
@@ -87,11 +87,16 @@ export function ConversationPage() {
   const [mode, setMode] = useState<Mode>('direct')
   const [messages, setMessages] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
-  const [listening, setListening] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // True while the mirror composer has its own mic open — the page-level
+  // guards (mode/scenario switches) must respect that capture too.
+  const [mirrorCapturing, setMirrorCapturing] = useState(false)
 
-  const recorderRef = useRef<Recorder | null>(null)
+  // Direct-mode microphone (shared engine with the mirror composer).
+  const mic = useMicCapture()
+  const listening = mic.capturing
+  const micActive = listening || mirrorCapturing
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0]
@@ -209,52 +214,62 @@ export function ConversationPage() {
 
   const sendText = () => {
     const t = text.trim()
-    if (!t || busy) return
+    // Not while the mic is open: the input is showing the live partial then,
+    // and sending the older typed text would race the capture.
+    if (!t || busy || listening) return
     setText('')
     void send({ text: t, display: t })
   }
 
-  // Fast path: transcribe in the browser and send text (no upload / no Whisper).
-  const listen = async () => {
+  // The mic is hers to close: tap to open, speak without hurry, tap again to
+  // send. The capture engine (held recognition with a recording fallback for
+  // browsers that won't listen, like the installed iPhone/iPad app) lives in
+  // useMicCapture and is shared with the mirror composer.
+  const handleCapture = async (r: CaptureResult) => {
+    switch (r.kind) {
+      case 'text':
+        await send({ text: r.text, display: r.text })
+        return
+      case 'clip':
+        void send({ audioBase64: await blobToBase64(r.blob), audioMime: r.mime })
+        return
+      case 'empty':
+        setError(r.blocked ? micBlockedHint() : NOTHING_HEARD_HINT)
+        return
+      case 'noop':
+        return
+    }
+  }
+
+  // The auto-stop callback runs from a closure created when the capture
+  // started; this ref keeps it pointing at the *current* handler.
+  const captureRef = useRef(handleCapture)
+  useEffect(() => {
+    captureRef.current = handleCapture
+  })
+
+  const startListening = async () => {
     if (busy || listening) return
     setError(null)
-    setListening(true)
-    try {
-      const said = await listenOnce()
-      if (said.trim()) await send({ text: said, display: said })
-      else setError('Não ouvi nada. Toque e fale de novo, ou escreva abaixo.')
-    } catch {
-      setError('Não consegui ouvir. Toque para tentar de novo, ou escreva abaixo.')
-    } finally {
-      // Always release the mic, even if recognition never reported back — this
-      // is what keeps the screen from freezing in the "ouvindo…" state.
-      setListening(false)
+    const res = await mic.start({ onAutoStop: (r) => void captureRef.current(r) })
+    if (!res.ok && res.reason !== 'canceled') {
+      setError(
+        res.reason === 'unsupported'
+          ? micBlockedHint()
+          : 'Não consegui acessar o microfone. Você pode digitar em vez disso.',
+      )
     }
   }
 
-  // Fallback for browsers without speech recognition: record and let Whisper transcribe.
-  const toggleRecord = async () => {
-    if (busy) return
-    if (listening) {
-      const rec = recorderRef.current
-      recorderRef.current = null
-      setListening(false)
-      const clip = await rec?.stop()
-      if (clip) {
-        void send({ audioBase64: await blobToBase64(clip.blob), audioMime: clip.mime })
-      }
-      return
-    }
-    try {
-      recorderRef.current = await startRecording()
-      setListening(true)
-      setError(null)
-    } catch {
-      setError('Não consegui acessar o microfone. Você pode digitar em vez disso.')
-    }
+  /** Second tap — close the mic and send what she said. */
+  const stopListening = async () => {
+    await handleCapture(await mic.stop())
   }
 
-  const onMic = canListen ? listen : toggleRecord
+  const onMic = () => {
+    if (listening) void stopListening()
+    else void startListening()
+  }
 
   // — "Modo espelho" —
 
@@ -357,7 +372,7 @@ export function ConversationPage() {
             // Also blocked while the mic is open: switching now would hide the
             // stop button with the recorder still running, or land the turn
             // that's already on its way in the mode she just left.
-            disabled={busy || listening}
+            disabled={busy || micActive}
             aria-pressed={m.id === mode}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
               m.id === mode ? 'bg-aurora-3/25 text-cream' : 'bg-white/8 text-mist/70 hover:bg-white/15'
@@ -375,7 +390,9 @@ export function ConversationPage() {
           <button
             key={s.id}
             onClick={() => selectScenario(s.id)}
-            disabled={busy}
+            // Also blocked while the mic is open — switching then would wipe
+            // the conversation and land the capture in the new scenario.
+            disabled={busy || micActive}
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
               s.id === scenarioId ? 'bg-rose-400/25 text-rose-100' : 'bg-white/8 text-mist/70 hover:bg-white/15'
             }`}
@@ -396,7 +413,7 @@ export function ConversationPage() {
           <TemplateDialogPanel
             dialog={templateDialog}
             onStart={() => startScenario(scenarioId)}
-            busy={busy}
+            busy={busy || micActive}
           />
         ) : !conversationActive ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-mist/50">
@@ -404,7 +421,9 @@ export function ConversationPage() {
             <p>Escolha uma situação acima, ou toque no microfone e diga “{lang.hello}”.</p>
             <button
               onClick={() => startScenario(scenarioId)}
-              disabled={busy}
+              // Also blocked while the mic is open — a kickoff arriving while
+              // the capture is still going would interleave two turns.
+              disabled={busy || micActive}
               className="mt-1 flex items-center gap-2 rounded-full bg-rose-400/20 px-5 py-2 text-sm text-rose-100 transition-colors hover:bg-rose-400/30 disabled:opacity-50"
             >
               <Play size={14} /> Começar conversa
@@ -441,14 +460,16 @@ export function ConversationPage() {
           onIntent={mirrorIntent}
           onHear={mirrorHear}
           onSend={mirrorSend}
+          onCapturingChange={setMirrorCapturing}
         />
       ) : (
       <div className="flex items-center gap-2">
         <button
           onClick={onMic}
           disabled={busy}
-          title={listening ? 'Ouvindo…' : 'Falar'}
-          aria-label={listening ? 'Ouvindo…' : 'Falar'}
+          aria-pressed={listening}
+          title={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
+          aria-label={listening ? 'Pronto — enviar o que eu disse' : 'Falar'}
           className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors disabled:opacity-50 ${
             listening ? 'bg-rose-500/80 text-white' : 'bg-white/8 text-aurora-3 hover:bg-white/15'
           }`}
@@ -456,16 +477,20 @@ export function ConversationPage() {
           <Mic size={20} className={listening ? 'animate-pulse' : ''} />
         </button>
         <input
-          value={text}
+          value={listening ? mic.partial : text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendText()}
-          placeholder={listening ? 'ouvindo… fale agora' : `ou escreva em ${langName}…`}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && sendText()}
+          placeholder={
+            listening
+              ? 'ouvindo… fale sem pressa e toque no microfone quando terminar'
+              : `ou escreva em ${langName}…`
+          }
           disabled={listening || busy}
           className="flex-1 rounded-2xl border border-white/12 bg-white/5 px-4 py-3 outline-none placeholder:text-mist/35 focus:border-aurora-3/50 disabled:opacity-50"
         />
         <button
           onClick={sendText}
-          disabled={busy || !text.trim()}
+          disabled={busy || listening || !text.trim()}
           aria-label="Enviar"
           className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/8 text-cream hover:bg-white/15 disabled:opacity-40"
         >

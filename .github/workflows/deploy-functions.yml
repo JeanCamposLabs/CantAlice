@@ -1,13 +1,19 @@
 name: Deploy Supabase functions
 
 # The website deploys to GitHub Pages automatically, but the Edge Functions
-# (translate / progress) are a SEPARATE deploy. This runs `supabase functions
-# deploy` whenever the function source changes, so fixes go live without a
-# manual step.
+# (progress / translate / converse) are a SEPARATE deploy. This runs
+# `supabase functions deploy` whenever the function source changes, so fixes go
+# live without a manual step.
 #
 # One-time setup: add a repository secret SUPABASE_ACCESS_TOKEN
-# (Supabase dashboard → Account → Access Tokens). Without it, this job is
-# skipped — nothing breaks, it just won't auto-deploy.
+# (Supabase dashboard → Account → Access Tokens).
+#
+# Without that secret this job FAILS on purpose. It used to skip the deploy and
+# still report success, so a function fix could sit unpublished for months
+# behind a green check — which is exactly what happened, leaving server-side
+# fixes (a security one among them) unpublished while everything looked shipped.
+# A red run here means: the functions running on Supabase are older than this
+# repository.
 
 on:
   push:
@@ -29,16 +35,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Checked before the deploy steps, which are now unconditional: a missing
+      # secret can never again masquerade as a successful deploy.
+      - name: Check deploy credentials
+        if: env.SUPABASE_ACCESS_TOKEN == ''
+        run: |
+          echo "::error title=Edge Functions NOT deployed::SUPABASE_ACCESS_TOKEN is missing, so supabase/functions/** could not be published — the functions on Supabase are now older than this repository."
+          echo
+          echo "To fix (one-time):"
+          echo "  1. Supabase dashboard -> Account -> Access Tokens -> generate a token."
+          echo "  2. GitHub -> Settings -> Secrets and variables -> Actions -> New"
+          echo "     repository secret, named SUPABASE_ACCESS_TOKEN."
+          echo "  3. Re-run: Actions -> Deploy Supabase functions -> Run workflow."
+          echo
+          echo "One-off alternative, from a local checkout:"
+          echo "  supabase functions deploy --project-ref $PROJECT_REF"
+          exit 1
+
       - name: Set up Supabase CLI
-        if: env.SUPABASE_ACCESS_TOKEN != ''
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
       - name: Deploy functions
-        if: env.SUPABASE_ACCESS_TOKEN != ''
         run: supabase functions deploy --project-ref "$PROJECT_REF"
-
-      - name: Notice when not configured
-        if: env.SUPABASE_ACCESS_TOKEN == ''
-        run: echo "SUPABASE_ACCESS_TOKEN not set — skipping function deploy. Add the secret to enable auto-deploy."

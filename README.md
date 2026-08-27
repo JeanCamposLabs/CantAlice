@@ -231,10 +231,17 @@ enviar.
 ### 🚀 Deploy automático das funções
 
 Com o secret de repositório **`SUPABASE_ACCESS_TOKEN`** (GitHub → Settings →
-Secrets → Actions), o workflow
+Secrets and variables → Actions), o workflow
 [`deploy-functions.yml`](.github/workflows/deploy-functions.yml) roda
 `supabase functions deploy` sempre que algo em `supabase/functions/**` muda —
-sem deploy manual. Sem o secret, ele é pulado sem erro.
+sem deploy manual.
+
+> ⚠️ **Sem o secret, esse workflow falha de propósito.** Antes ele era pulado
+> "sem erro", e o resultado foi correção de função parada meses atrás de um
+> check verde, com todo mundo achando que já estava no ar. Um ✗ vermelho aqui
+> significa: *as funções no Supabase estão mais velhas que este repositório*.
+> Depois de configurar o secret, dá para publicar na hora sem esperar o próximo
+> push, em **Actions → Deploy Supabase functions → Run workflow**.
 
 ### 💤 Evitando a pausa automática do Supabase
 

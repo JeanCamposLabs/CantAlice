@@ -48,7 +48,8 @@ const MODES: { id: Mode; label: string; hint: (lang: string) => string }[] = [
     id: 'mirror',
     label: '🪞 Espelho',
     hint: (lang) =>
-      `Você diz em português, a IA mostra em ${lang} e você repete — aí a conversa segue.`,
+      `1) você fala em português · 2) ouça e repita em ${lang} (shadowing) · 3) toque em ` +
+      `Enviar quando terminar · 4) a resposta chega em ${lang} com a legenda em português ao mesmo tempo.`,
   },
 ]
 
@@ -584,8 +585,15 @@ function Bubble({ msg }: { msg: Msg }) {
           )}
           <div className="space-y-0.5">
             <p className="leading-snug">{msg.content}</p>
-            {/* In "espelho": what the line means, or what she meant to say. */}
-            {msg.pt && <p className="text-xs italic text-mist/55">{msg.pt}</p>}
+            {/* In "espelho": for the tutor, this is the pt-BR subtitle running
+                simultaneously with her line (step 4); for the learner's own
+                bubble, it's what she meant to say. */}
+            {msg.pt && (
+              <p className="text-xs italic text-mist/55">
+                {!mine && <span className="not-italic">🇧🇷 </span>}
+                {msg.pt}
+              </p>
+            )}
           </div>
         </div>
         <AnimatePresence>

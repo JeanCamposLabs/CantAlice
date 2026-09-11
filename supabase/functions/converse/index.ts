@@ -5,13 +5,25 @@
 //   transcript + history  --Claude-->  short in-character reply + gentle tip
 //   reply  --OpenAI TTS-->  natural mp3 audio
 //
-// Two modes, same shape in and out:
+// Three modes, same shape in and out. Together "say" then "chat" (explain)
+// drive the 4-step shadowing flow used by "modo espelho":
+//   1. the learner sends her line in Portuguese ("say" mode's input),
+//   2. we translate it and speak it — the `reply`/`audio` pair the learner
+//      shadows (repeats the pronunciation of) — `stage: "shadow"`,
+//   3. the app waits for the learner's repetition (captured client-side, no
+//      call here),
+//   4. once she sends it, "chat" mode (with `explain`) answers as the
+//      interlocutor in the target language *and* returns the pt-BR subtitle
+//      of that reply in the same response — `stage: "reply"`.
+//
 //   mode "chat" (default) — the learner speaks the language being learned and
 //     the tutor answers in character. With `explain`, the reply also comes back
-//     translated to pt-BR so a beginner can follow the conversation.
+//     translated to pt-BR so a beginner can follow the conversation — this is
+//     step 4 of the shadowing flow, reply and subtitle arriving together.
 //   mode "say"  — the learner says in *Portuguese* what they want to say next,
 //     and we hand back the natural sentence to say out loud in the target
-//     language (the "mirror"/simultaneous-translation practice).
+//     language, plus its audio — step 2 of the shadowing flow (the "mirror"/
+//     simultaneous-translation practice).
 //   mode "hear" — transcribe only (Whisper, no Claude, no TTS). This is what
 //     lets the repeat step work on iPhone/iPad home-screen apps, where Safari
 //     ships SpeechRecognition but refuses to run it.
@@ -230,12 +242,18 @@ async function chat(
     `always end with a simple question to keep the conversation going. If the learner's ` +
     `last message had a noticeable ${languageName} mistake, briefly note the correction ` +
     `in Brazilian Portuguese.` +
+    (explain
+      ? ` This message is what the learner just shadowed out loud (she heard it spoken, ` +
+        `repeated it, and it's now her turn in the conversation) — answer it as the next ` +
+        `natural line from your character, so she can shadow your reply next.`
+      : '') +
     ` Respond as strict JSON: {"reply": string, "tip": string` +
     (explain ? `, "pt": string` : '') +
     `}. "tip" is the pt-BR correction or "" if there was nothing worth correcting.` +
     (explain
-      ? ` "pt" is a natural Brazilian Portuguese translation of your own reply, so the ` +
-        `learner can follow along.`
+      ? ` "pt" is a natural Brazilian Portuguese translation of your own reply, delivered ` +
+        `together with "reply" as its simultaneous subtitle so the learner can follow along ` +
+        `while she listens to and shadows the ${languageName} audio.`
       : '') +
     ` No markdown, JSON only.`
 
@@ -261,20 +279,22 @@ async function sayIt(
   languageName = 'English',
 ) {
   const system =
-    `You help a Brazilian Portuguese speaker say what they mean in ${languageName}. ` +
-    `They are in the middle of a spoken conversation (the messages so far are in ` +
-    `${languageName}) and they tell you in Portuguese what they want to say next. Give ` +
-    `them the sentence to say out loud.` +
+    `You help a Brazilian Portuguese speaker say what they mean in ${languageName}, for ` +
+    `a shadowing exercise: they tell you in Portuguese what they want to say next, you ` +
+    `translate it, and it will be read aloud by text-to-speech for them to listen to and ` +
+    `repeat out loud before the conversation continues. They are in the middle of a ` +
+    `spoken conversation (the messages so far are in ${languageName}).` +
     scenarioClause(scenario) +
     ` Rules: keep their meaning, tone and length — never add ideas, extra sentences or ` +
     `questions they did not ask for; use everyday spoken ${languageName} at an ` +
     `easy–intermediate level; if the Portuguese is unclear, choose the most natural ` +
-    `reading. Write only the words they should say: no quotes, no commentary, no ` +
-    `translation of your own.` +
+    `reading. Favor natural, clearly pronounceable phrasing — this sentence is meant to ` +
+    `be listened to and echoed back, not read silently. Write only the words they should ` +
+    `say: no quotes, no commentary, no translation of your own.` +
     ` Respond as strict JSON: {"say": string, "note": string}. "say" is the ` +
-    `${languageName} sentence. "note" is a very short Brazilian Portuguese tip about it ` +
-    `(a tricky word, an everyday expression) or "" when there is nothing useful to add. ` +
-    `No markdown, JSON only.`
+    `${languageName} sentence to shadow. "note" is a very short Brazilian Portuguese tip ` +
+    `about it (a tricky word, an everyday expression) or "" when there is nothing useful ` +
+    `to add. No markdown, JSON only.`
 
   const messages = [
     ...history.slice(-8),
@@ -381,7 +401,14 @@ Deno.serve(async (req: Request) => {
     // Silence is a valid answer ('' transcript), not an error — the app shows
     // its own "não ouvi nada" hint.
     if (hearMode) {
-      return json({ transcript: userText, reply: '', tip: '', translation: '', audio: null })
+      return json({
+        transcript: userText,
+        reply: '',
+        tip: '',
+        translation: '',
+        audio: null,
+        stage: 'hear',
+      })
     }
     if (!userText) return json({ error: 'empty input' }, 400)
 
@@ -400,6 +427,9 @@ Deno.serve(async (req: Request) => {
       tip: out.tip,
       translation: out.pt,
       audio,
+      // "shadow" — sentence + audio for the learner to repeat (step 2).
+      // "reply"  — the interlocutor's line + simultaneous pt-BR subtitle (step 4).
+      stage: sayMode ? 'shadow' : 'reply',
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

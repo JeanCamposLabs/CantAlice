@@ -23,6 +23,13 @@ export interface ConverseResult {
   translation: string
   /** Base64 mp3 of the spoken reply, or null. */
   audio: string | null
+  /**
+   * Which step of the shadowing flow this answers: 'shadow' — `reply`/`audio`
+   * are the sentence to repeat (mode 'say'); 'reply' — the interlocutor's next
+   * line, with `translation` as its simultaneous pt-BR subtitle (mode 'chat');
+   * 'hear' — transcript only (mode 'hear').
+   */
+  stage: 'shadow' | 'reply' | 'hear' | ''
 }
 
 export const IS_CONVERSE_CONFIGURED = IS_CLOUD_CONFIGURED
@@ -106,7 +113,8 @@ export async function converse(input: {
   if (res.status === 403) throw new ConverseError('not_allowed')
   if (res.status === 402) throw new ConverseError('no_funds')
   if (!res.ok) throw new ConverseError('failed')
-  // Normalize: a function deployed before "modo espelho" won't send `translation`.
+  // Normalize: a function deployed before "modo espelho"/`stage` won't send
+  // `translation`/`stage`.
   const data = (await res.json()) as Partial<ConverseResult>
   return {
     transcript: data.transcript ?? '',
@@ -114,6 +122,7 @@ export async function converse(input: {
     tip: data.tip ?? '',
     translation: data.translation ?? '',
     audio: data.audio ?? null,
+    stage: data.stage ?? '',
   }
 }
 

@@ -330,6 +330,10 @@ export function MirrorComposer({
             </button>
           </div>
 
+          <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-aurora-3/80">
+            <Volume2 size={11} /> ouça e repita (shadowing)
+          </span>
+
           <div className="flex items-start gap-2.5">
             <button
               onClick={() => playPhrase(phrase)}
@@ -463,7 +467,8 @@ export function MirrorComposer({
             <Loader2 size={11} className="animate-spin" /> montando a frase em {langName}…
           </span>
         ) : (
-          `você fala em português · a IA mostra em ${langName} · você repete`
+          `você fala em português · ouve e repete em ${langName} (shadowing) · a resposta ` +
+          `chega com legenda em português`
         )}
       </p>
       {hint && <p className="text-center text-xs text-amber-300/80">{hint}</p>}

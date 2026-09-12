@@ -345,7 +345,12 @@ export function ConversationPage() {
   const visible = messages.filter((m) => !m.hidden)
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
+    // The 7rem this used to reserve only covered the fixed bottom bar itself,
+    // not the sticky mobile top bar above it — on the "espelho" flow's taller
+    // composer (the shadowing panel) that let the bottom bar cover "Falar em
+    // {lang}"/"Enviar". 14rem clears the top bar + bottom bar + a safe margin
+    // for notched phones (measured against real geometry, not guessed).
+    <div className="flex h-[calc(100dvh-14rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>

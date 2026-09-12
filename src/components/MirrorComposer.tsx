@@ -4,7 +4,7 @@ import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Check } from 'lucid
 import { canSpeak, speak } from '../lib/speak'
 import { scorePronunciation, type PronScore } from '../lib/listen'
 import { blobToBase64 } from '../lib/converse'
-import { playBase64Mp3 } from '../lib/audio'
+import { playBase64Mp3, stopSpokenAudio } from '../lib/audio'
 import { micBlockedHint } from '../lib/record'
 import { useMicCapture, NOTHING_HEARD_HINT, type CaptureResult } from '../hooks/useMicCapture'
 
@@ -217,6 +217,10 @@ export function MirrorComposer({
   const startCapture = async (target: Exclude<Capturing, null>) => {
     if (capturing || thinking || busy) return
     setHint(null)
+    // Silence the shadowing audio (or the browser TTS fallback) before
+    // opening the mic — otherwise it hears its own playback and the
+    // recognizer loops on the echo instead of the learner's voice.
+    stopSpokenAudio()
     const res = await mic.start({
       lang: target === 'pt' ? PT_LOCALE : undefined,
       // The hold died on its own (watchdog / mic error): treat it like a
@@ -337,9 +341,12 @@ export function MirrorComposer({
           <div className="flex items-start gap-2.5">
             <button
               onClick={() => playPhrase(phrase)}
+              // While the mic is open, playing the phrase again would feed the
+              // shadowing audio right back into the recognizer.
+              disabled={capturing !== null}
               title="Ouvir de novo"
               aria-label="Ouvir de novo"
-              className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15"
+              className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15 disabled:opacity-40"
             >
               <Volume2 size={17} />
             </button>

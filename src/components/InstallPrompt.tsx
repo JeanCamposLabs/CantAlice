@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Download, Share, Plus, X, Sparkles } from 'lucide-react'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { useLang } from '../lib/useLangName'
+import { useUI } from '../store/useUI'
 
 const DISMISS_KEY = 'canta-alice:install-dismissed'
 
@@ -17,8 +18,10 @@ export function InstallPrompt() {
   const [dismissed, setDismissed] = useState(
     () => localStorage.getItem(DISMISS_KEY) === '1',
   )
-  const [showIosSteps, setShowIosSteps] = useState(false)
   const [visible, setVisible] = useState(false)
+  const installStepsOpen = useUI((s) => s.installStepsOpen)
+  const openInstallSteps = useUI((s) => s.openInstallSteps)
+  const closeInstallSteps = useUI((s) => s.closeInstallSteps)
 
   // Reveal a short moment after load so it doesn't fight the first paint.
   useEffect(() => {
@@ -40,14 +43,14 @@ export function InstallPrompt() {
       const ok = await promptInstall()
       if (ok) dismiss()
     } else if (ios) {
-      setShowIosSteps(true)
+      openInstallSteps()
     }
   }
 
   return (
     <>
       <AnimatePresence>
-        {shouldShow && !showIosSteps && (
+        {shouldShow && !installStepsOpen && (
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -80,7 +83,7 @@ export function InstallPrompt() {
         )}
       </AnimatePresence>
 
-      <IosInstructions open={showIosSteps} onClose={() => setShowIosSteps(false)} onDone={dismiss} />
+      <IosInstructions open={installStepsOpen} onClose={closeInstallSteps} onDone={dismiss} />
     </>
   )
 }

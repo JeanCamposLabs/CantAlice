@@ -10,6 +10,12 @@ interface UIState {
   openRequestAccess: () => void
   closeRequestAccess: () => void
 
+  /** The iOS "add to home screen" step-by-step sheet — reachable from the
+   * dismissible toast (InstallPrompt) and from a persistent nav button. */
+  installStepsOpen: boolean
+  openInstallSteps: () => void
+  closeInstallSteps: () => void
+
   /** A celebratory message shown with confetti, or null. */
   celebration: string | null
   celebrate: (message: string) => void
@@ -24,6 +30,10 @@ export const useUI = create<UIState>((set) => ({
   requestAccessOpen: false,
   openRequestAccess: () => set({ requestAccessOpen: true }),
   closeRequestAccess: () => set({ requestAccessOpen: false }),
+
+  installStepsOpen: false,
+  openInstallSteps: () => set({ installStepsOpen: true }),
+  closeInstallSteps: () => set({ installStepsOpen: false }),
 
   celebration: null,
   celebrate: (message) => set({ celebration: message }),

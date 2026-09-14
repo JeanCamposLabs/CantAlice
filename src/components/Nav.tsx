@@ -11,6 +11,7 @@ import {
   MessagesSquare,
   Sparkles,
   RotateCcw,
+  Download,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
@@ -21,8 +22,26 @@ import { useLibrary, selectReviewCounts } from '../store/useLibrary'
 import { Brand } from './Brand'
 import { beginLogin, logout } from '../spotify/auth'
 import { applyUpdate } from '../hooks/useAppUpdate'
+import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { IS_SPOTIFY_CONFIGURED } from '../config'
 import { useLang } from '../lib/useLangName'
+
+/**
+ * Persistent "Instalar app" action, so it isn't only reachable through the
+ * dismissible toast: native browsers get the real install dialog, iOS gets
+ * the same step-by-step sheet. Hidden once installed, or where neither path
+ * is available.
+ */
+function useInstallAction() {
+  const { standalone, canPromptNative, promptInstall, ios } = useInstallPrompt()
+  const openInstallSteps = useUI((s) => s.openInstallSteps)
+  const show = !standalone && (canPromptNative || ios)
+  const install = async () => {
+    if (canPromptNative) await promptInstall()
+    else if (ios) openInstallSteps()
+  }
+  return { show, install }
+}
 
 const ITEMS: { view: View; label: string; icon: typeof Home }[] = [
   { view: 'home', label: 'Início', icon: Home },
@@ -172,6 +191,7 @@ export function Sidebar() {
   const { view, go } = useNav()
   const lang = useLang()
   const reviewCount = useLibrary(useShallow((s) => selectReviewCounts(s).total))
+  const { show: showInstall, install } = useInstallAction()
   return (
     <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 flex-col gap-2 border-r border-white/5 px-5 py-7 lg:flex">
       <div className="px-2">
@@ -190,6 +210,16 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="mt-auto">
+        {showInstall && (
+          <button
+            onClick={() => void install()}
+            title="Instalar o app na tela de início"
+            className="mb-1 flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-medium text-mist/70 transition-colors hover:bg-white/5 hover:text-cream"
+          >
+            <Download size={20} />
+            <span className="text-[0.95rem]">Instalar app</span>
+          </button>
+        )}
         <button
           onClick={() => applyUpdate()}
           title="Recarregar o app do zero, se algo travar"
@@ -235,10 +265,21 @@ export function MobileBar() {
 }
 
 export function MobileTopBar() {
+  const { show: showInstall, install } = useInstallAction()
   return (
     <header className="pt-safe sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-night-900/60 px-5 py-4 backdrop-blur-xl lg:hidden">
       <Brand compact />
       <div className="flex items-center gap-1">
+        {showInstall && (
+          <button
+            onClick={() => void install()}
+            aria-label="Instalar o app"
+            title="Instalar o app"
+            className="rounded-full p-2 text-mist/60 transition-colors hover:bg-white/10 hover:text-cream"
+          >
+            <Download size={20} />
+          </button>
+        )}
         <button
           onClick={() => applyUpdate()}
           aria-label="Recarregar o app"

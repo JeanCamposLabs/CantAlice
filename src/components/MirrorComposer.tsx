@@ -4,7 +4,7 @@ import { Mic, Send, Volume2, Loader2, RotateCcw, ArrowRight, Check } from 'lucid
 import { canSpeak, speak } from '../lib/speak'
 import { scorePronunciation, type PronScore } from '../lib/listen'
 import { blobToBase64 } from '../lib/converse'
-import { playBase64Mp3, stopSpokenAudio } from '../lib/audio'
+import { playBase64Mp3 } from '../lib/audio'
 import { micBlockedHint } from '../lib/record'
 import { useMicCapture, NOTHING_HEARD_HINT, type CaptureResult } from '../hooks/useMicCapture'
 
@@ -33,6 +33,16 @@ export interface MirrorPhrase {
   audio: string | null
 }
 
+/** The interlocutor's reply, once the line went into the conversation. */
+export interface MirrorReply {
+  /** The reply, in the language being learned. */
+  reply: string
+  /** Natural voice for `reply`, when the server could synthesize it. */
+  audio: string | null
+  /** pt-BR subtitle of the reply, running alongside it. */
+  pt: string
+}
+
 /** Repeat this well and the line goes into the conversation on its own. */
 const GOOD_ENOUGH = 0.7
 const AUTO_SEND_MS = 1600
@@ -45,6 +55,9 @@ const MAX_LISTEN_MS = 45_000
 type Step =
   | { kind: 'ask' }
   | { kind: 'repeat'; phrase: MirrorPhrase; score: PronScore | null; heard: string }
+  /** The turn went through — now shadow the interlocutor's reply before
+   * saying her own next line. */
+  | { kind: 'shadowReply'; reply: MirrorReply; score: PronScore | null; heard: string }
 
 /** Which half of the flow the mic is open for. */
 type Capturing = 'pt' | 'target' | null
@@ -77,8 +90,9 @@ export function MirrorComposer({
   onIntent: (intent: MirrorIntent) => Promise<MirrorPhrase | null>
   /** Transcribe a clip in the language being learned. Null when it failed. */
   onHear: (clip: MirrorClip) => Promise<string | null>
-  /** She's ready: put this line into the conversation. False if it didn't go. */
-  onSend: (phrase: MirrorPhrase) => Promise<boolean>
+  /** She's ready: put this line into the conversation. Null if it didn't go;
+   * otherwise the interlocutor's reply, to shadow next. */
+  onSend: (phrase: MirrorPhrase) => Promise<MirrorReply | null>
   /** Tells the page when the mic is open, so it can hold its own switches. */
   onCapturingChange?: (active: boolean) => void
 }) {
@@ -115,7 +129,9 @@ export function MirrorComposer({
   }, [micOpen, onCapturingChange])
 
   /**
-   * Hand the line to the conversation; keep it here if the turn failed.
+   * Hand the line to the conversation; keep it here if the turn failed. Once
+   * it goes through, the interlocutor's reply becomes the next thing to
+   * shadow — she practices it the same way before saying her own next line.
    *
    * Guarded by a ref, not by state: the step only changes once the turn comes
    * back, so tapping "Enviar" during the auto-send countdown would otherwise
@@ -125,10 +141,18 @@ export function MirrorComposer({
     if (sendingRef.current) return
     sendingRef.current = true
     try {
-      const ok = await onSend(phrase)
-      setStep((s) =>
-        ok ? { kind: 'ask' } : s.kind === 'repeat' ? { ...s, score: null, heard: '' } : s,
-      )
+      const reply = await onSend(phrase)
+      if (!reply) {
+        setStep((s) => (s.kind === 'repeat' ? { ...s, score: null, heard: '' } : s))
+        return
+      }
+      if (!reply.reply.trim()) {
+        setStep({ kind: 'ask' })
+        return
+      }
+      setStep({ kind: 'shadowReply', reply, score: null, heard: '' })
+      if (reply.audio) void playBase64Mp3(reply.audio)
+      else if (canSpeak) speak(reply.reply)
     } finally {
       sendingRef.current = false
     }
@@ -144,13 +168,19 @@ export function MirrorComposer({
   })
 
   // Repeated it well? Let the conversation move on by itself — that's the flow
-  // Alice asked for ("e assim seguimos a conversa"). Held while the mic is
-  // open: a "Repetir" attempt must not have the phrase sent (and the step
-  // reset) out from under it, which would orphan a live mic with no controls.
+  // Alice asked for ("e assim seguimos a conversa"): a good "repeat" sends the
+  // line, and a good "shadowReply" just moves on to her next line. Held while
+  // the mic is open: a "Repetir" attempt must not have the step change out
+  // from under it, which would orphan a live mic with no controls.
   useEffect(() => {
-    if (step.kind !== 'repeat' || !step.score || step.score.ratio < GOOD_ENOUGH || micOpen) return
-    const phrase = step.phrase
-    const timer = setTimeout(() => void deliverRef.current(phrase), AUTO_SEND_MS)
+    if (step.kind !== 'repeat' && step.kind !== 'shadowReply') return
+    if (!step.score || step.score.ratio < GOOD_ENOUGH || micOpen) return
+    if (step.kind === 'repeat') {
+      const phrase = step.phrase
+      const timer = setTimeout(() => void deliverRef.current(phrase), AUTO_SEND_MS)
+      return () => clearTimeout(timer)
+    }
+    const timer = setTimeout(() => setStep({ kind: 'ask' }), AUTO_SEND_MS)
     return () => clearTimeout(timer)
   }, [step, micOpen])
 
@@ -217,10 +247,6 @@ export function MirrorComposer({
   const startCapture = async (target: Exclude<Capturing, null>) => {
     if (capturing || thinking || busy) return
     setHint(null)
-    // Silence the shadowing audio (or the browser TTS fallback) before
-    // opening the mic — otherwise it hears its own playback and the
-    // recognizer loops on the echo instead of the learner's voice.
-    stopSpokenAudio()
     const res = await mic.start({
       lang: target === 'pt' ? PT_LOCALE : undefined,
       // The hold died on its own (watchdog / mic error): treat it like a
@@ -258,7 +284,12 @@ export function MirrorComposer({
   }
 
   const scoreAttempt = (heard: string) => {
-    setStep((s) => (s.kind === 'repeat' ? { ...s, score: scorePronunciation(s.phrase.say, heard), heard } : s))
+    setStep((s) => {
+      if (s.kind === 'repeat') return { ...s, score: scorePronunciation(s.phrase.say, heard), heard }
+      if (s.kind === 'shadowReply')
+        return { ...s, score: scorePronunciation(s.reply.reply, heard), heard }
+      return s
+    })
   }
 
   const sendNow = () => {
@@ -414,6 +445,112 @@ export function MirrorComposer({
             className="flex items-center gap-2 rounded-full bg-white/8 px-4 py-2.5 text-sm text-cream transition-colors hover:bg-white/15 disabled:opacity-50"
           >
             Enviar <ArrowRight size={15} />
+          </button>
+        </div>
+        {hint && <p className="shrink-0 pt-2 text-center text-xs text-amber-300/80">{hint}</p>}
+      </div>
+    )
+  }
+
+  // — Step 4: shadow the interlocutor's reply, then move on —
+  if (step.kind === 'shadowReply') {
+    const { reply, score, heard } = step
+    const perfect = score?.ratio === 1
+    const good = (score?.ratio ?? 0) >= GOOD_ENOUGH
+    const playReply = () => {
+      if (reply.audio) void playBase64Mp3(reply.audio)
+      else if (canSpeak) speak(reply.reply)
+    }
+
+    return (
+      <div className="glass flex max-h-[62dvh] flex-col rounded-3xl p-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-aurora-3/80">
+            <Volume2 size={11} /> ouça e repita a resposta (shadowing)
+          </span>
+
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={playReply}
+              // While the mic is open, playing the reply again would feed the
+              // shadowing audio right back into the recognizer.
+              disabled={capturing !== null}
+              title="Ouvir de novo"
+              aria-label="Ouvir de novo"
+              className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/8 text-aurora-3 transition-colors hover:bg-white/15 disabled:opacity-40"
+            >
+              <Volume2 size={17} />
+            </button>
+            <div className="space-y-0.5">
+              <p className="font-display text-lg leading-snug text-cream sm:text-2xl">
+                {reply.reply}
+              </p>
+              {reply.pt && (
+                <p className="text-xs italic text-mist/55">
+                  <span className="not-italic">🇧🇷 </span>
+                  {reply.pt}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {score && !capturing && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center gap-1.5 text-center"
+              >
+                <span
+                  className={`text-sm font-semibold ${
+                    perfect ? 'text-emerald-300' : good ? 'text-emerald-200' : 'text-amber-200'
+                  }`}
+                >
+                  {perfect ? 'Perfeito! 🎉' : good ? 'Muito bem! 👏' : 'Quase — tente de novo 🎤'}
+                </span>
+                {score.words.length > 1 && (
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {score.words.map((w, i) => (
+                      <span
+                        key={i}
+                        className={`rounded px-1.5 py-0.5 text-xs ${
+                          w.ok
+                            ? 'bg-emerald-400/15 text-emerald-200'
+                            : 'bg-rose-400/15 text-rose-200'
+                        }`}
+                      >
+                        {w.word}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {heard && !perfect && (
+                  <span className="text-xs text-mist/40">ouvi: “{heard}”</span>
+                )}
+                {good && <span className="text-xs text-mist/45">seguindo para a próxima fala…</span>}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {capturing === 'target' && <LiveHint what={`repita em ${langName}`} />}
+          {thinking && (
+            <p className="flex items-center justify-center gap-1.5 text-xs text-mist/45">
+              <Loader2 size={11} className="animate-spin" /> ouvindo o que você disse…
+            </p>
+          )}
+        </div>
+
+        {/* Pinned controls — always on screen. */}
+        <div className="mt-3 flex shrink-0 items-center justify-center gap-2 pt-1">
+          <MicButton which="target" label={score ? 'Repetir' : `Falar em ${langName}`} />
+          <button
+            onClick={() => setStep({ kind: 'ask' })}
+            disabled={capturing !== null}
+            title="Continuar a conversa"
+            className="flex items-center gap-2 rounded-full bg-white/8 px-4 py-2.5 text-sm text-cream transition-colors hover:bg-white/15 disabled:opacity-50"
+          >
+            Continuar <ArrowRight size={15} />
           </button>
         </div>
         {hint && <p className="shrink-0 pt-2 text-center text-xs text-amber-300/80">{hint}</p>}

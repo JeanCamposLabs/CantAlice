@@ -22,6 +22,7 @@ import {
   type MirrorClip,
   type MirrorIntent,
   type MirrorPhrase,
+  type MirrorReply,
 } from '../components/MirrorComposer'
 import { PHRASEBOOKS, type DialogLine } from '../content/phrasebook'
 
@@ -49,7 +50,8 @@ const MODES: { id: Mode; label: string; hint: (lang: string) => string }[] = [
     label: '🪞 Espelho',
     hint: (lang) =>
       `1) você fala em português · 2) ouça e repita em ${lang} (shadowing) · 3) toque em ` +
-      `Enviar quando terminar · 4) a resposta chega em ${lang} com a legenda em português ao mesmo tempo.`,
+      `Enviar quando terminar · 4) a resposta chega em ${lang} com a legenda em português ao ` +
+      `mesmo tempo — repita ela também antes de continuar.`,
   },
 ]
 
@@ -130,7 +132,10 @@ export function ConversationPage() {
     display?: string
     /** pt-BR sub-line under her bubble (what she meant, in "espelho"). */
     displayPt?: string
-  }): Promise<boolean> => {
+    /** Skip the automatic voice playback — "espelho" plays the reply itself,
+     * as the shadowing step's own audio, once the caller has it in hand. */
+    skipAutoVoice?: boolean
+  }): Promise<ConverseResult | null> => {
     setBusy(true)
     setError(null)
     const history = historyTurns()
@@ -164,8 +169,8 @@ export function ConversationPage() {
         })
         return next
       })
-      voiceReply(r)
-      return true
+      if (!opts.skipAutoVoice) voiceReply(r)
+      return r
     } catch (e) {
       // The turn failed: take the optimistic bubble back and restore the text to
       // the composer so a retry is one tap away (nothing was answered). In
@@ -175,7 +180,7 @@ export function ConversationPage() {
         if (opts.text && mode === 'direct') setText(opts.text)
       }
       setError(messageFromError(e, 'Algo deu errado. Tente de novo.'))
-      return false
+      return null
     } finally {
       setBusy(false)
     }
@@ -319,9 +324,20 @@ export function ConversationPage() {
     }
   }
 
-  /** She repeated it — now it counts as her turn in the conversation. */
-  const mirrorSend = (phrase: MirrorPhrase) =>
-    send({ text: phrase.say, display: phrase.say, displayPt: phrase.pt })
+  /**
+   * She repeated it — now it counts as her turn in the conversation. Hands
+   * back the interlocutor's reply so the composer can offer it to shadow
+   * next; the reply's own voice plays there, not here.
+   */
+  const mirrorSend = async (phrase: MirrorPhrase): Promise<MirrorReply | null> => {
+    const r = await send({
+      text: phrase.say,
+      display: phrase.say,
+      displayPt: phrase.pt,
+      skipAutoVoice: true,
+    })
+    return r ? { reply: r.reply, audio: r.audio, pt: r.translation } : null
+  }
 
   // — Gates —
   if (!IS_CONVERSE_CONFIGURED) {
@@ -345,12 +361,13 @@ export function ConversationPage() {
   const visible = messages.filter((m) => !m.hidden)
 
   return (
-    // The 7rem this used to reserve only covered the fixed bottom bar itself,
-    // not the sticky mobile top bar above it — on the "espelho" flow's taller
-    // composer (the shadowing panel) that let the bottom bar cover "Falar em
-    // {lang}"/"Enviar". 14rem clears the top bar + bottom bar + a safe margin
-    // for notched phones (measured against real geometry, not guessed).
-    <div className="flex h-[calc(100dvh-14rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
+    // MobileTopBar/MobileBar now have fixed heights (h-16 / h-[4.5rem]) rather
+    // than ones sized to font metrics, so this number no longer drifts with
+    // whether the custom fonts have loaded. Budget: top bar 4rem + main's own
+    // pt-6 1.5rem + bottom pill 4.5rem + its mb-3 0.75rem + a safe-area-inset
+    // margin (notched phones add padding on both ends that isn't visible to
+    // this calc) ≈ 16rem.
+    <div className="flex h-[calc(100dvh-16rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>
@@ -437,7 +454,7 @@ export function ConversationPage() {
           </div>
         ) : null}
         {visible.map((m, i) => (
-          <Bubble key={i} msg={m} />
+          <Bubble key={i} msg={m} micActive={micActive} />
         ))}
         {busy && (
           <div className="flex items-center gap-2 text-sm text-mist/50">
@@ -561,7 +578,7 @@ function TemplateDialogPanel({
   )
 }
 
-function Bubble({ msg }: { msg: Msg }) {
+function Bubble({ msg, micActive }: { msg: Msg; micActive: boolean }) {
   const mine = msg.role === 'user'
   const replay = () => {
     if (msg.audio) void playBase64Mp3(msg.audio)
@@ -582,8 +599,11 @@ function Bubble({ msg }: { msg: Msg }) {
           {!mine && (canSpeak || msg.audio) && (
             <button
               onClick={replay}
+              // While a mic is open, replaying an old line would feed its
+              // audio right back into the recognizer.
+              disabled={micActive}
               title="Ouvir de novo"
-              className="mt-0.5 shrink-0 text-aurora-3 hover:text-cream"
+              className="mt-0.5 shrink-0 text-aurora-3 hover:text-cream disabled:opacity-40"
             >
               <Volume2 size={15} />
             </button>

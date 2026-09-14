@@ -249,7 +249,10 @@ export function MobileBar() {
   const reviewCount = useLibrary(useShallow((s) => selectReviewCounts(s).total))
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 lg:hidden">
-      <div className="glass-strong mx-3 mb-3 flex items-center justify-around rounded-3xl px-2 py-1.5">
+      {/* Fixed height (not padding sized to content) so pages that reserve
+          room for this bar below can rely on a number that doesn't drift
+          with font metrics/loading. */}
+      <div className="glass-strong mx-3 mb-3 flex h-[4.5rem] items-center justify-around rounded-3xl px-2">
         {MOBILE_ITEMS.map((item) => (
           <NavButton
             key={item.view}
@@ -267,7 +270,7 @@ export function MobileBar() {
 export function MobileTopBar() {
   const { show: showInstall, install } = useInstallAction()
   return (
-    <header className="pt-safe sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-night-900/60 px-5 py-4 backdrop-blur-xl lg:hidden">
+    <header className="pt-safe sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/5 bg-night-900/60 px-5 backdrop-blur-xl lg:hidden">
       <Brand compact />
       <div className="flex items-center gap-1">
         {showInstall && (

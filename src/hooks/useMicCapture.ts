@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { canListen, listenHeld, type HeldListen } from '../lib/listen'
 import { canRecord, startRecording, type Recorder } from '../lib/record'
+import { stopSpokenAudio } from '../lib/audio'
 
 /** Shared "heard nothing" advice, so the composers never drift apart. */
 export const NOTHING_HEARD_HINT = 'Não ouvi nada. Toque no microfone e fale de novo.'
@@ -141,6 +142,11 @@ export function useMicCapture(maxMs = 60_000): MicCapture {
   const start: MicCapture['start'] = async (opts = {}) => {
     // Already open (or opening): treat as success, there is a live mic.
     if (heldRef.current || recorderRef.current || openingRef.current) return { ok: true }
+    // Silence any spoken audio (server TTS or the browser fallback) before
+    // opening the mic — every capture in the app goes through here, so this
+    // is the one place that reliably stops the mic hearing its own playback
+    // and looping on the echo instead of the speaker's voice.
+    stopSpokenAudio()
     const epoch = ++epochRef.current
     autoStopRef.current = opts.onAutoStop ?? null
     setPartial('')

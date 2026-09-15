@@ -329,12 +329,17 @@ async function speak(text: string, voice: string): Promise<string | null> {
         model: 'tts-1',
         voice: TTS_VOICES.has(voice) ? voice : DEFAULT_VOICE,
         input: text,
-        // Plain mp3, no speed/pitch overrides. A `speed` below 1.0 on tts-1
-        // is a documented source of audio artifacts — unnatural pauses,
-        // choppy/distorted playback, worse on phone speakers — which is
-        // exactly what a slower pace was supposed to avoid causing. Voice
-        // choice alone now carries the calmer, unhurried feel.
         response_format: 'mp3',
+        // A touch slower than natural conversational pace (1.0 is normal,
+        // 0.25–4.0 is the valid range), so a beginner can follow the
+        // shadowing clearly without losing the natural connected-speech
+        // rhythm. Chose the gentler end of the requested 0.85–0.9 range: a
+        // sub-1.0 speed on tts-1 is a documented source of audio artifacts
+        // (unnatural pauses, choppy playback, worse on phone speakers), and
+        // the last regression here (before dropping speed entirely) may
+        // have come from exactly this parameter rather than the old voice —
+        // 0.9 keeps that risk as small as the requested range allows.
+        speed: 0.9,
       }),
     })
     if (!res.ok) return null

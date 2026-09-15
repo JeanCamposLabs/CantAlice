@@ -309,12 +309,14 @@ const TTS_VOICES = new Set([
   'alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer',
 ])
 
-// "sage" is OpenAI's calm, steady-paced voice (their own docs pitch it for
-// education/instructional guides) — closer to a patient teacher reading
-// aloud than the brighter, faster-sounding voices, which is what a beginner
-// shadowing needs. The client never overrides this today, so it's the voice
-// everyone hears.
-const DEFAULT_VOICE = 'sage'
+// "sage" read as too expressive in practice — its warm, "velvet-textured"
+// delivery came across as artificial and over-dramatized rather than calm.
+// "coral" is OpenAI's e-learning-oriented voice: clear, professional
+// articulation with a friendly, approachable tone, tuned for content where
+// every word needs to land plainly — closer to a language teacher's neutral
+// diction than a performance. The client never overrides this today, so
+// it's the voice everyone hears.
+const DEFAULT_VOICE = 'coral'
 
 /** Synthesize the reply to natural speech (mp3, base64) with OpenAI TTS. */
 async function speak(text: string, voice: string): Promise<string | null> {

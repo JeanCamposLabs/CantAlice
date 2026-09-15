@@ -309,14 +309,14 @@ const TTS_VOICES = new Set([
   'alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer',
 ])
 
-// "sage" read as too expressive in practice — its warm, "velvet-textured"
-// delivery came across as artificial and over-dramatized rather than calm.
-// "coral" is OpenAI's e-learning-oriented voice: clear, professional
-// articulation with a friendly, approachable tone, tuned for content where
-// every word needs to land plainly — closer to a language teacher's neutral
-// diction than a performance. The client never overrides this today, so
-// it's the voice everyone hears.
-const DEFAULT_VOICE = 'coral'
+// Two voices tried and rejected before this one: "sage" read as too
+// expressive (warm, "velvet-textured" — artificial, over-dramatized),
+// "coral" still read as forced/AI-sounding. OpenAI's own pitch for "alloy"
+// is the opposite of both: it's built to blend into any context "without
+// drawing attention to itself," avoiding the extremes (too warm/cold, too
+// energetic/subdued) that made the other two sound like a performance. The
+// client never overrides this today, so it's the voice everyone hears.
+const DEFAULT_VOICE = 'alloy'
 
 /** Synthesize the reply to natural speech (mp3, base64) with OpenAI TTS. */
 async function speak(text: string, voice: string): Promise<string | null> {
@@ -329,11 +329,12 @@ async function speak(text: string, voice: string): Promise<string | null> {
         model: 'tts-1',
         voice: TTS_VOICES.has(voice) ? voice : DEFAULT_VOICE,
         input: text,
+        // Plain mp3, no speed/pitch overrides. A `speed` below 1.0 on tts-1
+        // is a documented source of audio artifacts — unnatural pauses,
+        // choppy/distorted playback, worse on phone speakers — which is
+        // exactly what a slower pace was supposed to avoid causing. Voice
+        // choice alone now carries the calmer, unhurried feel.
         response_format: 'mp3',
-        // A touch slower than natural conversational pace (1.0 is normal,
-        // 0.25–4.0 is the valid range) — clearer for a learner shadowing it
-        // without sounding robotic.
-        speed: 0.9,
       }),
     })
     if (!res.ok) return null

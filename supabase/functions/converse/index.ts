@@ -304,10 +304,17 @@ async function sayIt(
   return { reply: parsed.say || parsed._raw || '', tip: parsed.note ?? '', pt: '' }
 }
 
-/** The OpenAI TTS voices we accept from the client; anything else → nova. */
+/** The OpenAI TTS voices we accept from the client; anything else → the default. */
 const TTS_VOICES = new Set([
   'alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer',
 ])
+
+// "sage" is OpenAI's calm, steady-paced voice (their own docs pitch it for
+// education/instructional guides) — closer to a patient teacher reading
+// aloud than the brighter, faster-sounding voices, which is what a beginner
+// shadowing needs. The client never overrides this today, so it's the voice
+// everyone hears.
+const DEFAULT_VOICE = 'sage'
 
 /** Synthesize the reply to natural speech (mp3, base64) with OpenAI TTS. */
 async function speak(text: string, voice: string): Promise<string | null> {
@@ -318,9 +325,13 @@ async function speak(text: string, voice: string): Promise<string | null> {
       headers: { Authorization: `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'tts-1',
-        voice: TTS_VOICES.has(voice) ? voice : 'nova',
+        voice: TTS_VOICES.has(voice) ? voice : DEFAULT_VOICE,
         input: text,
         response_format: 'mp3',
+        // A touch slower than natural conversational pace (1.0 is normal,
+        // 0.25–4.0 is the valid range) — clearer for a learner shadowing it
+        // without sounding robotic.
+        speed: 0.9,
       }),
     })
     if (!res.ok) return null
@@ -419,7 +430,7 @@ Deno.serve(async (req: Request) => {
 
     // 3) Voice it (unless the client opted out). Both modes speak the target
     //    language, so the same voice works for either.
-    const audio = body.speak === false ? null : await speak(out.reply, body.voice ?? 'nova')
+    const audio = body.speak === false ? null : await speak(out.reply, body.voice ?? DEFAULT_VOICE)
 
     return json({
       transcript: userText,

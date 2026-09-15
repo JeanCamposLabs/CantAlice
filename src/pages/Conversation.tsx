@@ -361,13 +361,26 @@ export function ConversationPage() {
   const visible = messages.filter((m) => !m.hidden)
 
   return (
-    // MobileTopBar/MobileBar now have fixed heights (h-16 / h-[4.5rem]) rather
-    // than ones sized to font metrics, so this number no longer drifts with
-    // whether the custom fonts have loaded. Budget: top bar 4rem + main's own
-    // pt-6 1.5rem + bottom pill 4.5rem + its mb-3 0.75rem + a safe-area-inset
-    // margin (notched phones add padding on both ends that isn't visible to
-    // this calc) ≈ 16rem.
-    <div className="flex h-[calc(100dvh-16rem)] flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:gap-4">
+    // A flat rem guess for the bottom-bar clearance kept working on some
+    // phones and not others: notched phones report a real
+    // env(safe-area-inset-bottom) for the home-indicator area (tens of px)
+    // that a plain iPad browser tab reports as 0, so any single constant is
+    // wrong for one side or the other. Compute it instead: top bar (fixed
+    // h-16) 4rem + main's own pt-6 1.5rem + the bottom pill (fixed
+    // h-[4.5rem]) 4.5rem + its mb-3 0.75rem = 10.75rem of known chrome, plus
+    // MobileBar's own pb-safe (max(0.75rem, env(safe-area-inset-bottom))) —
+    // the same expression that class applies, kept in sync with it — plus a
+    // small fixed cushion for subpixel rounding, since this is now an exact
+    // sum rather than a padded guess.
+    //
+    // overflow-y-auto is the safety net for when that math is still short —
+    // e.g. the mic's "ouvindo…" hint wrapping to an extra line on a narrow
+    // phone can grow the composer past what's left after the header/mode
+    // switch/scenario chips. flex-col with a fixed height doesn't clip
+    // overflowing children on its own, so without this the composer's own
+    // buttons render past this div's bottom edge — under the fixed nav,
+    // unclickable, instead of one scroll away.
+    <div className="flex h-[calc(100dvh-11.25rem-max(0.75rem,env(safe-area-inset-bottom)))] flex-col gap-3 overflow-y-auto lg:h-[calc(100dvh-3rem)] lg:gap-4">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl sm:text-4xl">Conversar</h1>

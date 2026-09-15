@@ -47,10 +47,31 @@ export interface MirrorReply {
 const GOOD_ENOUGH = 0.7
 const AUTO_SEND_MS = 1600
 
+/** This many wrong words means a beginner needs a patient nudge to try
+ * again, not a pass — never auto-advance past that, even if the overall
+ * ratio happens to still clear GOOD_ENOUGH on a longer phrase. */
+const NEEDS_PRACTICE_WRONG_WORDS = 3
+
 const PT_LOCALE = 'pt-BR'
 
 /** Ceiling for one attempt — she stops when she's ready, this is just a net. */
 const MAX_LISTEN_MS = 45_000
+
+/** She's repeated it well enough to move on. */
+function isGoodEnough(score: PronScore): boolean {
+  const wrong = score.words.filter((w) => !w.ok).length
+  return score.ratio >= GOOD_ENOUGH && wrong < NEEDS_PRACTICE_WRONG_WORDS
+}
+
+/** What to tell her about an attempt — patient, not just pass/fail. */
+function feedbackMessage(score: PronScore): string {
+  if (score.ratio === 1) return 'Perfeito! 🎉'
+  if (isGoodEnough(score)) return 'Muito bem! 👏'
+  const wrong = score.words.filter((w) => !w.ok).length
+  if (wrong >= NEEDS_PRACTICE_WRONG_WORDS)
+    return 'Sem pressa, vamos com calma — repita de novo, você já está quase lá 💪'
+  return 'Quase — tente de novo 🎤'
+}
 
 type Step =
   | { kind: 'ask' }
@@ -174,7 +195,7 @@ export function MirrorComposer({
   // from under it, which would orphan a live mic with no controls.
   useEffect(() => {
     if (step.kind !== 'repeat' && step.kind !== 'shadowReply') return
-    if (!step.score || step.score.ratio < GOOD_ENOUGH || micOpen) return
+    if (!step.score || !isGoodEnough(step.score) || micOpen) return
     if (step.kind === 'repeat') {
       const phrase = step.phrase
       const timer = setTimeout(() => void deliverRef.current(phrase), AUTO_SEND_MS)
@@ -346,7 +367,7 @@ export function MirrorComposer({
   if (step.kind === 'repeat') {
     const { phrase, score, heard } = step
     const perfect = score?.ratio === 1
-    const good = (score?.ratio ?? 0) >= GOOD_ENOUGH
+    const good = score ? isGoodEnough(score) : false
 
     return (
       <div className="glass flex max-h-[62dvh] flex-col rounded-3xl p-4">
@@ -401,7 +422,7 @@ export function MirrorComposer({
                     perfect ? 'text-emerald-300' : good ? 'text-emerald-200' : 'text-amber-200'
                   }`}
                 >
-                  {perfect ? 'Perfeito! 🎉' : good ? 'Muito bem! 👏' : 'Quase — tente de novo 🎤'}
+                  {feedbackMessage(score)}
                 </span>
                 {score.words.length > 1 && (
                   <div className="flex flex-wrap justify-center gap-1">
@@ -456,7 +477,7 @@ export function MirrorComposer({
   if (step.kind === 'shadowReply') {
     const { reply, score, heard } = step
     const perfect = score?.ratio === 1
-    const good = (score?.ratio ?? 0) >= GOOD_ENOUGH
+    const good = score ? isGoodEnough(score) : false
     const playReply = () => {
       if (reply.audio) void playBase64Mp3(reply.audio)
       else if (canSpeak) speak(reply.reply)
@@ -507,7 +528,7 @@ export function MirrorComposer({
                     perfect ? 'text-emerald-300' : good ? 'text-emerald-200' : 'text-amber-200'
                   }`}
                 >
-                  {perfect ? 'Perfeito! 🎉' : good ? 'Muito bem! 👏' : 'Quase — tente de novo 🎤'}
+                  {feedbackMessage(score)}
                 </span>
                 {score.words.length > 1 && (
                   <div className="flex flex-wrap justify-center gap-1">
